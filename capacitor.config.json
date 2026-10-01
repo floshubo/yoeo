@@ -1,0 +1,18 @@
+{
+  "appId": "app.yoeo.mobile",
+  "appName": "YOEO",
+  "webDir": "dist",
+  "backgroundColor": "#366823",
+  "loggingBehavior": "production",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#FFFFFF",
+    "preferredContentMode": "mobile",
+    "allowsLinkPreview": false
+  },
+  "android": {
+    "backgroundColor": "#366823",
+    "allowMixedContent": false,
+    "captureInput": true
+  }
+}

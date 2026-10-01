@@ -1,0 +1,71 @@
+import {createRequire} from 'node:module';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const require = createRequire(path.resolve(process.env.YOEO_TOOLS_DIR || '.', 'package.json'));
+const {chromium} = require('playwright');
+const browser = await chromium.launch({headless:true});
+const page = await browser.newPage({viewport:{width:390,height:844}});
+const errors=[];
+page.on('pageerror', e=>errors.push(e.message));
+let pro=false, authenticated=false, limit=false, unavailable=false;
+const report={id:'navigation-test',createdAt:new Date().toISOString(),title:'Test menu',model:'test',sourceType:'menu',readable:true,summary:'Test',profileSnapshot:[],warnings:[],dishes:[{id:'dish',name:'Soup',description:'Soup',ingredients:[],allergens:[],uncertainties:[],questions:[],status:'Uncertain'}]};
+await page.route('**/api/**', async route=>{
+ const url=new URL(route.request().url());
+ let body={},status=200;
+ if(url.pathname==='/api/health')body={configured:true};
+ if(url.pathname==='/api/usage'){body={enforced:true,plan:pro?'pro':'free',remaining:limit?0:3};if(unavailable)status=503;}
+ if(url.pathname==='/api/auth/config')body={enabled:true,providers:{google:false,apple:false}};
+ if(url.pathname==='/api/auth/verify'){authenticated=true;body={sessionToken:'test-session'};}
+ if(url.pathname==='/api/auth/session'){status=authenticated?200:401;body=authenticated?{user:{id:'test-user',email:'test@example.com'},sessionToken:'test-session'}:{};}
+ if(url.pathname==='/api/account/profiles')body=[];
+ if(url.pathname==='/api/analyze'){status=limit?401:200;body=limit?{code:'SIGN_IN_REQUIRED',error:'Three free scans used'}:report;}
+ await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+});
+await page.addInitScript(()=>{
+ if(!localStorage.getItem('yoeo-profile'))localStorage.setItem('yoeo-profile',JSON.stringify({name:'Test',completed:true,allergens:[{name:'Milk',severity:'Critical'}]}));
+ sessionStorage.setItem('yoeo-install-guide-seen','1');
+});
+const screen=async name=>page.locator(`.screen-${name}`).waitFor();
+const button=name=>page.getByRole('button',{name,exact:true});
+async function scan(){
+ await button('Start Analyzing').click();await button('Photo').click();await button('No, take the menu').click();
+ await page.getByLabel('Upload menu photos').setInputFiles('public/icon-192.png');
+ await page.getByRole('checkbox',{name:/I agree to send/}).check();
+ await button('Analyze 1 photo').click();
+}
+try {
+ await page.goto(process.env.YOEO_TEST_URL || 'http://127.0.0.1:5187');
+ await button('Edit allergens').click();await screen('allergens');
+ await button('Go back').click();await screen('home');
+ await button('Edit allergens').click();await page.getByRole('tab',{name:'Avoid',exact:true}).click();
+ await page.getByRole('navigation').getByRole('button',{name:'Profile',exact:true}).click();
+ await page.goBack();await screen('allergens');
+ assert.equal(await page.getByRole('tab',{name:'Avoid',exact:true}).getAttribute('aria-selected'),'true');
+ await page.getByRole('button',{name:/Add allergen/}).click();await page.goBack();
+ await page.getByRole('dialog').waitFor({state:'hidden'});await screen('allergens');
+ await button('Go back').click();await screen('home');
+ await scan();await button('Show all results').or(page.getByRole('button',{name:/Show all results/})).first().click();
+ await button('Save results').click();await page.getByRole('dialog',{name:'Unlock YOEO Pro'}).waitFor();
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),0);
+ await button('Not now').click();await screen('results');
+ unavailable=true;await button('Save results').click();await page.getByRole('status').filter({hasText:'Could not check your subscription'}).waitFor();
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),0);unavailable=false;
+ await button('Save results').click();await button('Sign up or sign in to upgrade').click();await screen('account');
+ await button('Go back').click();await screen('results');await button('Save results').waitFor();
+ await button('Save results').click();await button('Sign up or sign in to upgrade').click();
+ await page.getByLabel('Email address').fill('test@example.com');await button('Continue with email').click();
+ await page.getByLabel('Email code').fill('123456');pro=true;await button('Verify and sign in').click();await screen('home');
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')).length),1);
+ await page.getByRole('navigation').getByRole('button',{name:'Profile',exact:true}).click();await button('Saved Results').click();
+ await page.getByRole('tab',{name:'Uncertain',exact:true}).click();await page.getByRole('heading',{name:'Test menu'}).click();await screen('results');
+ await button('Go back').click();await screen('saved');
+ assert.equal(await page.getByRole('tab',{name:'Uncertain',exact:true}).getAttribute('aria-selected'),'true');
+ await page.getByRole('navigation').getByRole('button',{name:'Home',exact:true}).click();
+ limit=true;pro=false;await scan();await button('Sign in to continue').click();
+ await page.getByRole('dialog',{name:'Unlock YOEO Pro'}).waitFor();
+ await button('Upgrade to Pro').click();await screen('subscription');
+ await button('Go back').click();await screen('scan');
+ assert.equal(await page.getByAltText('Menu or food to analyze').count(),1);
+ assert.deepEqual(errors,[]);
+ console.log('Passed: back navigation, severity/filter preservation, modal Back, premium gating, failed checks, canceled upgrade, sign-in/save/home, saved-report Back, scan-limit CTA and retained photo.');
+} finally {await browser.close();}

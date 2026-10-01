@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="fish">
+<path d="M0 8C0 3.58172 3.58172 0 8 0H20C24.4183 0 28 3.58172 28 8V20C28 24.4183 24.4183 28 20 28H8C3.58172 28 0 24.4183 0 20V8Z" fill="#E0F3D4"/>
+<path id="Vector" d="M5 8H23M8 14H20M11 20H17" stroke="#366823" stroke-width="2" stroke-linecap="round"/>
+</g>
+</svg>

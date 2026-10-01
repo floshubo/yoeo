@@ -1,0 +1,8 @@
+{
+  "proxies": {
+    "/api/*": {
+      "upstream": "https://yoeo.onrender.com/api",
+      "rateLimit": "100/hour/ip"
+    }
+  }
+}

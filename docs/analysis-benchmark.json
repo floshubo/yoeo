@@ -1,0 +1,158 @@
+{
+  "date": "2026-09-14T07:52:19.462Z",
+  "baselineRef": "ac53e2b",
+  "results": [
+    {
+      "repeat": 0,
+      "fixture": "20 dishes",
+      "variant": "baseline-mini",
+      "ms": 22721,
+      "outputTokens": 2350,
+      "dishes": 20,
+      "failures": []
+    },
+    {
+      "repeat": 0,
+      "fixture": "20 dishes",
+      "variant": "concise-mini",
+      "ms": 15448,
+      "outputTokens": 1759,
+      "dishes": 20,
+      "failures": []
+    },
+    {
+      "repeat": 0,
+      "fixture": "20 dishes",
+      "variant": "concise-nano",
+      "ms": 8765,
+      "outputTokens": 1948,
+      "dishes": 20,
+      "failures": [
+        "Mushroom soup: missing Milk",
+        "Mushroom soup: severity",
+        "Salmon plate: missing Fish",
+        "Garlic shrimp: missing Crustaceans",
+        "Lentil stew: missing Celery"
+      ]
+    },
+    {
+      "repeat": 0,
+      "fixture": "separate German legend",
+      "variant": "baseline-mini",
+      "ms": 7533,
+      "outputTokens": 739,
+      "dishes": 4,
+      "failures": []
+    },
+    {
+      "repeat": 0,
+      "fixture": "separate German legend",
+      "variant": "concise-mini",
+      "ms": 7631,
+      "outputTokens": 609,
+      "dishes": 4,
+      "failures": []
+    },
+    {
+      "repeat": 0,
+      "fixture": "separate German legend",
+      "variant": "concise-nano",
+      "ms": 3116,
+      "outputTokens": 546,
+      "dishes": 4,
+      "failures": [
+        "missing/original name: Käsespätzle"
+      ]
+    },
+    {
+      "repeat": 1,
+      "fixture": "20 dishes",
+      "variant": "concise-nano",
+      "ms": 6837,
+      "outputTokens": 1506,
+      "dishes": 20,
+      "failures": [
+        "Mushroom soup: missing Milk",
+        "Mushroom soup: severity",
+        "Caesar salad: missing Eggs",
+        "Caesar salad: missing Milk",
+        "Caesar salad: missing Wheat",
+        "Caesar salad: severity",
+        "Pesto pasta: missing Wheat",
+        "Pesto pasta: missing Milk",
+        "Pesto pasta: severity",
+        "Margherita pizza: missing Wheat",
+        "Margherita pizza: missing Milk",
+        "Margherita pizza: severity",
+        "Salmon plate: missing Fish",
+        "Salmon plate: missing Milk",
+        "Salmon plate: severity",
+        "Garlic shrimp: missing Crustaceans",
+        "Beef burger: missing Wheat",
+        "Beef burger: missing Milk",
+        "Beef burger: severity",
+        "Chicken rice: missing Soybeans",
+        "Peanut noodles: missing Wheat",
+        "Peanut noodles: missing Peanuts",
+        "Peanut noodles: missing Soybeans",
+        "Tofu stir fry: missing Soybeans",
+        "Lentil stew: missing Celery",
+        "Chocolate cake: missing Wheat",
+        "Chocolate cake: missing Eggs",
+        "Chocolate cake: missing Milk",
+        "Chocolate cake: severity",
+        "Apple crumble: missing Wheat",
+        "Apple crumble: missing Milk",
+        "Apple crumble: severity",
+        "Vanilla ice cream: missing Milk",
+        "Vanilla ice cream: missing Eggs",
+        "Vanilla ice cream: severity"
+      ]
+    },
+    {
+      "repeat": 1,
+      "fixture": "20 dishes",
+      "variant": "concise-mini",
+      "ms": 16871,
+      "outputTokens": 1644,
+      "dishes": 20,
+      "failures": []
+    },
+    {
+      "repeat": 1,
+      "fixture": "20 dishes",
+      "variant": "baseline-mini",
+      "ms": 22270,
+      "outputTokens": 2393,
+      "dishes": 20,
+      "failures": []
+    },
+    {
+      "repeat": 1,
+      "fixture": "separate German legend",
+      "variant": "concise-nano",
+      "ms": 3318,
+      "outputTokens": 540,
+      "dishes": 4,
+      "failures": []
+    },
+    {
+      "repeat": 1,
+      "fixture": "separate German legend",
+      "variant": "concise-mini",
+      "ms": 5908,
+      "outputTokens": 646,
+      "dishes": 4,
+      "failures": []
+    },
+    {
+      "repeat": 1,
+      "fixture": "separate German legend",
+      "variant": "baseline-mini",
+      "ms": 9265,
+      "outputTokens": 820,
+      "dishes": 4,
+      "failures": []
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Mascot">
+<path id="Vector" d="M150.411 130.928L112 84.2667V42.6667H118.933C122.747 42.6667 125.867 39.5467 125.867 35.7333C125.867 31.92 122.747 28.8 118.933 28.8H63.4667C59.6533 28.8 56.5333 31.92 56.5333 35.7333C56.5333 39.5467 59.6533 42.6667 63.4667 42.6667H70.4V84.2667L31.9893 130.928C29.7707 133.632 28.8 136.683 28.8 139.733C28.8693 146.875 34.4853 153.6 42.6667 153.6H139.733C147.984 153.6 153.6 146.875 153.6 139.733C153.6 136.683 152.629 133.632 150.411 130.928Z" fill="#9CD97D"/>
+<path id="Vector 104" d="M77.1281 103.668L85.6273 108.014L75.6327 111.642" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector 105" d="M105.272 103.668L96.7727 108.014L106.767 111.642" stroke="black" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector 29" d="M90.3574 135.1C100.719 135.1 108 126.742 108 121.204C108 121.204 97.7241 121.198 91.1249 121.204C84.4847 121.209 74.4 121.204 74.4 121.204C74.4 126.742 81.2269 135.1 90.3574 135.1Z" stroke="black" stroke-width="2.4" stroke-linejoin="round"/>
+<circle id="Ellipse 70" cx="96.0867" cy="42.9953" r="2.58984" fill="white"/>
+<circle id="Ellipse 71" cx="99.0506" cy="63.986" r="4.83181" fill="white"/>
+<circle id="Ellipse 72" cx="91.2" cy="53.96" r="3.6" fill="white"/>
+</g>
+</svg>

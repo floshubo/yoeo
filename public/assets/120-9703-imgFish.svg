@@ -1,0 +1,11 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="75" height="75" viewBox="0 0 75 75" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="fish">
+<path id="Vector" d="M42.5051 24C33.2894 24 25.2415 29.3058 20.7622 33.8454L11.817 27.4468C10.5745 26.5575 8.71947 27.5049 9.037 28.867L11.5138 39.5L9.03598 50.134C8.71844 51.496 10.5735 52.4425 11.8159 51.5542L20.7612 45.1556C25.2405 49.6942 33.2894 55 42.5051 55C56.5852 55 68 42.6 68 39.5C68 36.4 56.5852 24 42.5051 24Z" fill="#FFCA70"/>
+<path id="Vector 20" d="M55 39.5C52.5 39.5 51.5 38 51.5 36.5H58.5C58.5 37.5 58 39.5 55 39.5Z" stroke="black"/>
+<path id="Vector 22" d="M56 37C56 37.3905 56 38.1095 56 38.5" stroke="black"/>
+<path id="Vector 21" d="M54 44.5C55.3333 44.6667 57.5 44.7 59.5 47.5" stroke="black"/>
+<path id="Vector 23" d="M38 22C38.6667 23.5 39.3 26.8 36.5 28" stroke="black"/>
+<path id="Vector 24" d="M41.5 21.5C41.1667 23.3333 41.6 26.6 46 25" stroke="black"/>
+<path id="Vector 25" d="M39 31.5001C38.8333 29.6667 40.1004 27 44.5004 29" stroke="black"/>
+</g>
+</svg>

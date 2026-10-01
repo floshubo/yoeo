@@ -1,0 +1,9 @@
+Alias name: yoeo-upload
+Creation date: 8 Sept 2026
+Owner: CN=YOEO, OU=Mobile, O=YOEO, L=Unknown, ST=Unknown, C=DE
+Issuer: CN=YOEO, OU=Mobile, O=YOEO, L=Unknown, ST=Unknown, C=DE
+Valid from: Tue Sep 08 15:23:26 CST 2026 until: Sat Jan 24 15:23:26 CST 2054
+	 SHA1: A4:26:F7:57:1F:63:99:4D:14:62:B7:86:29:02:2A:26:55:66:5D:08
+	 SHA256: DA:6B:43:B0:27:46:20:04:66:F5:0C:E9:90:6C:F7:19:24:4B:63:36:A3:A7:5E:55:C4:09:95:06:E8:53:10:5F
+Signature algorithm name: SHA384withRSA
+Subject Public Key Algorithm: 2048-bit RSA key

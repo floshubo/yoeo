@@ -1,0 +1,11 @@
+import {createRequire} from 'node:module';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const {chromium}=createRequire(path.resolve(process.env.YOEO_TOOLS_DIR,'package.json'))('playwright');
+const report=JSON.parse(await readFile('test-results/german-legend-report.json','utf8'));
+const browser=await chromium.launch();const page=await browser.newPage({viewport:{width:360,height:712}});
+await page.goto('http://127.0.0.1:5187');await page.evaluate(r=>{localStorage.setItem('yoeo-profile',JSON.stringify({name:'Alex',allergens:r.profileSnapshot,completed:true}));localStorage.setItem('yoeo-reports',JSON.stringify([r]));},report);await page.reload();
+await page.getByRole('navigation').getByRole('button',{name:'Profile',exact:true}).click();await page.getByRole('button',{name:'Saved Results',exact:true}).click();await page.locator('.saved-report-heading button').first().click();await page.getByText('From allergen list',{exact:true}).first().waitFor();await page.screenshot({path:'test-results/legend-result.png'});await page.getByRole('button',{name:'Go back',exact:true}).click();await page.getByRole('heading',{name:'Select what to show'}).waitFor();
+assert.ok(await page.getByRole('checkbox',{name:'Käsespätzle',exact:true}).isVisible());for(const checkbox of await page.getByRole('checkbox').all())await checkbox.uncheck();assert.ok(await page.getByRole('button',{name:'Check dishes',exact:true}).isDisabled());await page.screenshot({path:'test-results/dish-selection.png'});await page.getByRole('checkbox',{name:'Käsespätzle',exact:true}).check();await page.getByRole('button',{name:'Check 1 dishes'}).click();assert.equal(await page.locator('.report-dishes > article').count(),1);await page.getByRole('button',{name:/Evidence & questions/}).click();await page.getByText(/Menu code G/).waitFor();await page.screenshot({path:'test-results/legend-evidence.png'});
+await page.setViewportSize({width:320,height:640});assert.ok(await page.locator('.results-body').evaluate(e=>e.scrollWidth<=e.clientWidth));await browser.close();console.log('German dish selector, selection filtering, legend card evidence and mobile layout verified.');

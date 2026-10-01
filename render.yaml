@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: yoeo
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: APP_URL
+        value: https://yoeo.onrender.com
+      - key: API_PUBLIC_URL
+        value: https://yoeo.onrender.com
+      - key: AI_PROVIDER
+        value: openai-compatible
+      - key: AI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: AI_MODEL
+        value: gpt-4.1-mini
+      - key: AI_RESPONSE_FORMAT
+        value: json_schema
+      - key: AI_WINDOWS_HTTP
+        value: false
+      - key: AI_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: AUTH_GOOGLE_ENABLED
+        value: true
+      - key: AUTH_APPLE_ENABLED
+        value: true

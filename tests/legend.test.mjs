@@ -1,0 +1,9 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {personalize,jsonSchema} from '../server/schema.mjs';
+const dish={name:'Käsespätzle',allergenCodes:['G'],allergens:[],ingredients:[],description:'',uncertainties:[],questions:[]};
+const report={warnings:[],legend:[{code:'G',label:'Milch',allergens:['Milk']},{code:'B',label:'Eier',allergens:['Eggs']}],dishes:[dish]};
+test('only the codes attached to the dish are matched to the supplied legend',()=>{const r=personalize(report,[{name:'Milk',severity:'Critical'}]);assert.deepEqual(r.dishes[0].allergens.map(a=>a.name),['Milk']);assert.equal(r.dishes[0].allergens[0].source,'legend');assert.equal(r.dishes[0].allergens[0].certainty,'declared');assert.equal(r.dishes[0].status,'Critical');assert.equal(r.dishes[0].name,'Käsespätzle');});
+test('unmapped or conflicting codes remain uncertain without invented mappings',()=>{for(const legend of [[],[...report.legend,{code:'G',label:'Fisch',allergens:['Fish']}]]){const r=personalize({...report,legend},[]);assert.equal(r.dishes[0].allergens.length,0);assert.equal(r.dishes[0].status,'Uncertain');assert.match(r.dishes[0].uncertainties[0],/unambiguously/);}});
+test('AI inference remains distinguishable when there is no allergen list',()=>{const r=personalize({...report,legend:[],dishes:[{...dish,allergenCodes:[],allergens:[{name:'Milk',certainty:'possible',evidence:'Cheese may be used'}]}]},[{name:'Milk',severity:'Avoid'}]);assert.equal(r.dishes[0].allergens[0].source,'ai');assert.equal(r.dishes[0].allergens[0].certainty,'possible');assert.equal(r.dishes[0].status,'Avoid');});
+test('provider schema requires explicit legend and dish codes',()=>{assert.ok(jsonSchema.required.includes('legend'));assert.ok(jsonSchema.properties.dishes.items.required.includes('allergenCodes'));});

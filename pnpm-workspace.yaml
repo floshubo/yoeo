@@ -1,0 +1,9 @@
+packages:
+  - .
+
+allowBuilds:
+  esbuild: true
+  # Required by @capacitor/assets for native icons and splash images.
+  sharp: true
+
+virtualStoreDirMaxLength: 60

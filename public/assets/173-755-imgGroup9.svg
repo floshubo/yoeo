@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="62" height="72" viewBox="0 0 62 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Group 9">
+<path id="Rectangle 12" d="M5 4C5 1.79086 6.79086 0 9 0H58C60.2091 0 62 1.79086 62 4V68C62 70.2091 60.2091 72 58 72H9C6.79086 72 5 70.2091 5 68V4Z" fill="#9CD97D"/>
+<path id="Rectangle 13" d="M0 15C0 13.8954 0.895431 13 2 13H7C8.10457 13 9 13.8954 9 15V15C9 16.1046 8.10457 17 7 17H2C0.89543 17 0 16.1046 0 15V15Z" fill="#9CD97D"/>
+<path id="Rectangle 14" d="M0 29C0 27.8954 0.895431 27 2 27H7C8.10457 27 9 27.8954 9 29V29C9 30.1046 8.10457 31 7 31H2C0.89543 31 0 30.1046 0 29V29Z" fill="#9CD97D"/>
+<path id="Rectangle 15" d="M0 43C0 41.8954 0.895431 41 2 41H7C8.10457 41 9 41.8954 9 43V43C9 44.1046 8.10457 45 7 45H2C0.89543 45 0 44.1046 0 43V43Z" fill="#9CD97D"/>
+<path id="Rectangle 16" d="M0 57C0 55.8954 0.895431 55 2 55H7C8.10457 55 9 55.8954 9 57V57C9 58.1046 8.10457 59 7 59H2C0.89543 59 0 58.1046 0 57V57Z" fill="#9CD97D"/>
+<path id="Vector 41" d="M26 21H50" stroke="black"/>
+<path id="Vector 42" d="M26 31H45" stroke="black"/>
+<path id="Vector 44" d="M26 51H45" stroke="black"/>
+<path id="Vector 43" d="M26 41H50" stroke="black"/>
+<circle id="Ellipse 74" cx="18.5" cy="21" r="1.5" fill="black"/>
+<circle id="Ellipse 75" cx="18.5" cy="31" r="1.5" fill="black"/>
+<circle id="Ellipse 76" cx="18.5" cy="41" r="1.5" fill="black"/>
+<circle id="Ellipse 77" cx="18.5" cy="51" r="1.5" fill="black"/>
+</g>
+</svg>

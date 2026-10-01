@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Help with YOEO menu scans, accounts and subscriptions.">
+  <link rel="icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/language-menu.css?v=3">
+  <title>YOEO Support</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
+    :root{font-family:"DM Sans",system-ui,sans-serif;color:#102a20;background:#f9f8f3;line-height:1.6}*{box-sizing:border-box}body{margin:0}a{color:#2c5c32}.wrap{width:min(900px,calc(100% - 40px));margin:auto}.nav{height:84px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e3e8df}.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#102a20;font-family:Manrope,sans-serif;font-weight:800}.brand img{width:40px;height:40px;border-radius:12px}.nav-actions{display:flex;align-items:center;gap:22px}.back{font-size:.9rem;font-weight:700;text-decoration:none}.language-switcher{display:flex;gap:3px;padding:4px;border:1px solid #dce4dc;border-radius:999px;background:#fff}.language-switcher button{border:0;border-radius:999px;background:none;color:#56675a;cursor:pointer;font:700 .72rem "DM Sans",sans-serif;min-width:35px;padding:5px 6px}.language-switcher button[aria-pressed="true"]{background:#245831;color:#fff}.language-switcher button:focus-visible{outline:2px solid #245831;outline-offset:2px}
+    main{padding:65px 0 90px}.eyebrow{color:#2c5c32;font-size:.8rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase}h1,h2{font-family:Manrope,sans-serif;letter-spacing:-.04em}h1{font-size:clamp(3rem,7vw,5.3rem);line-height:1.03;margin:16px 0 14px}.intro{font-size:1.15rem;color:#5e6e65;margin:0 0 45px}.card{background:#fff;border:1px solid #dce4dc;border-radius:28px;padding:12px 38px 36px}.card section{padding:22px 0;border-bottom:1px solid #e5e9e2}.card section:last-child{border-bottom:0}h2{font-size:1.5rem;margin:0 0 10px}.card p{color:#58675d;margin:0}.legal-links{display:flex;gap:20px;flex-wrap:wrap;margin-top:30px;font-size:.9rem;font-weight:700}.legal-links a{text-decoration:none}
+    @media(max-width:600px){.wrap{width:calc(100% - 28px)}.nav-actions{gap:10px}.back{display:none}.card{padding:8px 22px 22px}main{padding-top:44px}h1{font-size:3.3rem}}
+  </style>
+</head>
+<body data-page="support">
+  <header class="wrap nav"><a class="brand" href="/" data-site-link><img src="/icon-192.png" alt="YOEO logo"><span>YOEO</span></a><div class="nav-actions"><a class="back" href="/" data-site-link>← <span data-i18n="back">Back to YOEO</span></a><div class="language-menu"><button type="button" class="language-trigger" aria-label="Website language: English" aria-expanded="false" aria-controls="language-options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9Z"/></svg><span class="language-label" data-i18n="languageLabel">Language</span><strong class="language-current" data-current-language>EN</strong><svg class="language-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><div class="language-options" id="language-options" hidden><button type="button" data-lang="en" aria-pressed="true">English <small>EN</small></button><button type="button" data-lang="de" aria-pressed="false">Deutsch <small>DE</small></button><button type="button" data-lang="zh" aria-pressed="false">中文 <small>ZH</small></button></div></div></div></header>
+  <main class="wrap"><span class="eyebrow">YOEO</span><h1 data-i18n="supportTitle">YOEO Support</h1><p class="intro" data-i18n="supportIntro">Help with menu scans, accounts and subscriptions.</p>
+    <div class="card">
+      <section><h2 data-i18n="scanningTitle">Scanning</h2><p data-i18n="scanningBody">Use a sharp, well-lit photo with the full menu text inside the frame. If the menu has a separate allergen legend, photograph that first and then add the menu pages. Always confirm ingredients and cross-contact with restaurant staff.</p></section>
+      <section><h2 data-i18n="accountTitle">Account and data</h2><p data-i18n="accountBody">Your profile stays on this device. Use the account screen to sign in or out, and App Settings to export or delete your data. If you are signed in, deleting data also permanently deletes your account and its associated database data.</p></section>
+      <section><h2 data-i18n="subscriptionsTitle">Subscriptions</h2><p data-i18n="subscriptionsBody">Open Profile → Subscription to purchase, restore or manage YOEO Pro. App Store and Google Play subscriptions can also be managed in the device’s store account settings.</p></section>
+      <section><h2 data-i18n="reportTitle">Report a problem</h2><p><span data-i18n="reportIntro">Email</span> <a href="mailto:YOEO.health@gmail.com">YOEO.health@gmail.com</a><span data-i18n="reportPunctuation">.</span> <span data-i18n="reportBody">If you received YOEO through TestFlight, you can also use the TestFlight app’s “Send Beta Feedback” action. Include what you tapped, what you expected, and your device model.</span></p></section>
+    </div>
+    <div class="legal-links"><a href="/privacy.html" data-site-link data-i18n="privacyPolicy">Privacy Policy</a><a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" data-i18n="terms">Terms of Use</a></div>
+  </main>
+  <script defer src="/landing-i18n.js?v=3"></script>
+</body>
+</html>
