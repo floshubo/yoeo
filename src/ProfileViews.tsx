@@ -5,7 +5,7 @@ import {Avatar,Icon,Button,Badge,Navigation,AllergenRow} from './components';
 import type {Report,Severity} from './types';
 import type {CustomerInfo,PurchasesPackage} from '@revenuecat/purchases-capacitor';
 import {
- configureRevenueCat,hasProEntitlement,listenForCustomerInfo,
+ configureRevenueCat,getRevenueCatCustomerInfo,hasProEntitlement,listenForCustomerInfo,
  presentRevenueCatCustomerCenter,
  purchaseErrorMessage,purchaseRevenueCatPackage,restoreRevenueCatPurchases,revenueCatIsNative,
  type RevenueCatSnapshot,
@@ -33,13 +33,14 @@ function packageFor(plan:PlanId,snapshot:RevenueCatSnapshot|null):PurchasesPacka
  if(plan==='yearly')return offering.annual||offering.availablePackages.find(p=>p.product.identifier==='yearly')||null;
  return offering.lifetime||offering.availablePackages.find(p=>p.product.identifier==='lifetime')||null;
 }
-export function Subscription({appUserId,onBack,onSignIn,onActivated}:{appUserId?:string|null;onBack:()=>void;onSignIn:()=>void;onActivated?:()=>void}) {
+export function Subscription({signedIn,onBack,onSignIn,onActivated}:{signedIn:boolean;onBack:()=>void;onSignIn:()=>void;onActivated?:(event:'purchase'|'restore')=>void}) {
  const native=revenueCatIsNative();
  const testStore=import.meta.env.MODE==='revenuecat-test';
  const [plan,setPlan]=useState<PlanId>('yearly');
  const [snapshot,setSnapshot]=useState<RevenueCatSnapshot|null>(null);
  const [loading,setLoading]=useState(native);
  const [busy,setBusy]=useState(false);
+ const [reload,setReload]=useState(0);
  const [message,setMessage]=useState('');
  const pro=hasProEntitlement(snapshot?.customerInfo||null);
  const selectedPackage=useMemo(()=>packageFor(plan,snapshot),[plan,snapshot]);
@@ -49,19 +50,24 @@ export function Subscription({appUserId,onBack,onSignIn,onActivated}:{appUserId?
   setLoading(true);setSnapshot(null);setMessage('');
   let active=true;
   let stop:undefined|(()=>void);
-  void configureRevenueCat(appUserId||null).then(data=>{
+  void configureRevenueCat().then(data=>{
    if(!active)return;
    setSnapshot(data);
    setLoading(false);
    stop=listenForCustomerInfo((customerInfo:CustomerInfo)=>setSnapshot(current=>current?{...current,customerInfo}:current));
-  }).catch(error=>{if(active){setMessage(purchaseErrorMessage(error));setLoading(false);}});
+  }).catch(async error=>{
+   // Purchases already made stay visible even when the product catalog is unavailable.
+   const customerInfo=await getRevenueCatCustomerInfo().catch(()=>null);
+   if(!active)return;
+   if(customerInfo)setSnapshot({customerInfo,offering:null});
+   setMessage(purchaseErrorMessage(error));setLoading(false);
+  });
   return()=>{active=false;stop?.();};
- },[appUserId,native]);
+ },[native,reload]);
 
- async function run(action:()=>Promise<CustomerInfo>,success:string){
-  if(!appUserId&&!testStore){onSignIn();return;}
+ async function run(action:()=>Promise<CustomerInfo|null>,success:string,event:'purchase'|'restore'){
   setBusy(true);setMessage('');
-  try{await configureRevenueCat(appUserId||null);const customerInfo=await action();setSnapshot(current=>current?{...current,customerInfo}:current);const active=hasProEntitlement(customerInfo);setMessage(active?success:'No active YOEO Pro purchase was found for this store account.');if(active)onActivated?.();}
+  try{const customerInfo=await action();if(!customerInfo)throw Error('Purchases are available in the mobile app.');setSnapshot(current=>({offering:current?.offering||null,customerInfo}));const active=hasProEntitlement(customerInfo);setMessage(active?success:'No active YOEO Pro purchase was found for this store account.');if(active)onActivated?.(event);}
   catch(error){const text=purchaseErrorMessage(error);if(text)setMessage(text);}
   finally{setBusy(false);}
  }
@@ -69,10 +75,14 @@ export function Subscription({appUserId,onBack,onSignIn,onActivated}:{appUserId?
   <img className="subscription-hero" src="/subscription-hero.png" alt="" />
   <div className="subscription-content">
    <h2>{pro?'YOEO Pro is active':'Get Started with YOEO Pro'}</h2>
+   <p className="subscription-account-note">No YOEO account needed. Purchase and restore with your store account.</p>
    <ul className="subscription-benefits"><li><img src="/subscription-check.svg" alt=""/>Unlimited allergen profiles</li><li><img src="/subscription-check.svg" alt=""/>Unlimited scans and analyses</li><li><img src="/subscription-check.svg" alt=""/>Full scan history</li></ul>
    <div className="subscription-plans" role="radiogroup" aria-label="Choose a plan">{(['monthly','yearly','lifetime'] as PlanId[]).map(id=>{const option=packageFor(id,snapshot);const price=loading?'Loading…':option?.product.priceString|| (native?'Unavailable':'In mobile app');return <button type="button" key={id} role="radio" aria-checked={plan===id} className={`subscription-plan ${plan===id?'selected':''}`} onClick={()=>setPlan(id)}><span><strong>{planLabels[id]}</strong><b>{price}{option&&id!=='lifetime'?id==='monthly'?'/month':'/year':''}</b></span>{plan===id?<img src="/subscription-selected.svg" alt=""/>:<span className="subscription-unselected" aria-hidden="true"/>}</button>;})}</div>
-   {!native?<Button disabled>Available in the mobile app</Button>:!appUserId&&!testStore?<Button onClick={onSignIn}>Sign in to continue</Button>:pro?<Button secondary onClick={()=>void presentRevenueCatCustomerCenter().catch(error=>setMessage(purchaseErrorMessage(error)))}>Manage subscription</Button>:<Button disabled={busy||loading||!selectedPackage} onClick={()=>selectedPackage&&void run(()=>purchaseRevenueCatPackage(selectedPackage),'YOEO Pro is active.')}>{busy?'Please wait…':selectedPackage?'Continue':'Product not available'}</Button>}
-   <div className="subscription-links">{native&&<button className="text-button" disabled={busy||loading} onClick={()=>void run(restoreRevenueCatPurchases,'Purchases restored. YOEO Pro is active.')}>Restore Purchase</button>}<LegalLinks /></div>
+   {!native?<Button disabled>Available in the mobile app</Button>:pro?<Button secondary disabled={busy} onClick={()=>void presentRevenueCatCustomerCenter().catch(error=>setMessage(purchaseErrorMessage(error)))}>Manage subscription</Button>:<Button disabled={busy||loading||!selectedPackage} onClick={()=>selectedPackage&&void run(()=>purchaseRevenueCatPackage(selectedPackage),'YOEO Pro is active.','purchase')}>{busy?'Please wait…':selectedPackage?'Continue':'Product not available'}</Button>}
+   {native&&!loading&&!snapshot?.offering&&!pro&&<button className="text-button" disabled={busy} onClick={()=>setReload(value=>value+1)}>Retry loading plans</button>}
+   <div className="subscription-links">{native&&<button className="text-button" disabled={busy} onClick={()=>void run(restoreRevenueCatPurchases,'Purchases restored. YOEO Pro is active.','restore')}>Restore Purchases</button>}<LegalLinks /></div>
+   <p className="privacy-note">Already subscribed? Restore purchases on any supported device using the same store account.</p>
+   {!signedIn&&<div className="subscription-optional-account"><p>You can sign in or create a YOEO account at any time. It is not needed to use Pro.</p><button className="text-button" disabled={busy} onClick={onSignIn}>Sign in or create account (optional)</button></div>}
    <p className="privacy-note">Monthly and annual subscriptions renew automatically unless canceled at least 24 hours before the current period ends. Payment is charged to your store account at confirmation. Lifetime is a one-time purchase.</p>
    {Capacitor.getPlatform()==='ios'&&<button className="text-button" onClick={()=>void openExternal('https://apps.apple.com/account/subscriptions').catch(()=>setMessage('Could not open subscription settings.'))}>Apple subscription settings</button>}
   {testStore&&<p className="subscription-message" role="status">Test Store — simulated purchases with an anonymous test customer. No payment will be charged.</p>}

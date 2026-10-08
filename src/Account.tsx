@@ -10,12 +10,12 @@ async function api(path:string,body?:unknown,method=body?'POST':'GET'){
  return data;
 }
 
-type Props={onBack:()=>void;onAuthChange:(signedIn:boolean)=>void;signedIn:boolean;savingResult?:boolean};
+type Props={onBack:()=>void;onAuthChange:(signedIn:boolean)=>void;signedIn:boolean;initialMode?:'signup'|'signin'};
 
-export default function Account({onBack,onAuthChange,signedIn,savingResult=false}:Props){
+export default function Account({onBack,onAuthChange,signedIn,initialMode='signin'}:Props){
  const [config,setConfig]=useState<{enabled:boolean;providers:{google:boolean;apple:boolean}}|null>(null);
  const [user,setUser]=useState<{id:string;email:string}|null>(null);
- const [mode,setMode]=useState<'signup'|'signin'>('signin');
+ const [mode,setMode]=useState<'signup'|'signin'>(initialMode);
  const [checking,setChecking]=useState(true);
  const [email,setEmail]=useState('');
  const [password,setPassword]=useState('');
@@ -33,10 +33,10 @@ export default function Account({onBack,onAuthChange,signedIn,savingResult=false
  async function passwordAuth(){const data=await api(mode==='signup'?'auth/signup':'auth/login',{email,password});if(data.needsConfirmation){setMode('signin');setPassword('');setMessage(data.message);return;}await refresh();}
 
  return <div className="page account-page">
-  <Topbar title={user?'Account':savingResult?'Save results':'Account'} onBack={onBack}/>
+  <Topbar title="Account" onBack={onBack}/>
   <div className="scroll-body padded account-content">
    {checking||(signedIn&&!user)?<p role="status">Checking account…</p>:!user?<>
-    <div className="account-intro"><h2>{savingResult?'Sign in to save your results':mode==='signup'?'Create your YOEO account':'Sign in'}</h2>{savingResult&&<p>Your analysis is ready. Sign in or create an account to keep it in Saved Results.</p>}</div>
+    <div className="account-intro"><h2>{mode==='signup'?'Create your YOEO account':'Sign in'}</h2><p>Signing in is optional. You can purchase, restore, scan and save results without a YOEO account.</p><p>Signing in syncs your allergen profile and saved results to your account and links your purchases for access on other platforms.</p><button type="button" className="text-button" onClick={onBack}>Continue without signing in</button></div>
     <div className="oauth-buttons">
      <Button disabled={!config?.providers.google||busy} secondary onClick={()=>void action(()=>beginOAuth('google'))}><img className="oauth-logo" src="/assets/oauth/google.svg" alt=""/>Continue with Google</Button>
      <Button disabled={!config?.providers.apple||busy} secondary onClick={()=>void action(()=>beginOAuth('apple'))}><img className="oauth-logo apple" src="/assets/oauth/apple.png" alt=""/>Continue with Apple</Button>

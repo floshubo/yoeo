@@ -14,7 +14,7 @@ On Windows development machines where Node networking cannot reach the configure
 
 ## Supabase accounts
 
-1. Create/select your Supabase project; apply all SQL files in `supabase/migrations` in order in a development project first. They provide person profiles, self-service deletion and Pro entitlements.
+1. Create/select your Supabase project; apply all SQL files in `supabase/migrations` in order in a development project first. They provide person profiles, saved results, self-service deletion and Pro entitlements.
 2. Copy the account fields from `.env.example` to `.env`. Use the project URL and publishable key for sign-in, profile access, and authenticated Pro checks. Set SESSION_SECRET to a randomly generated value of at least 32 characters; it signs the anonymous scan counter and account session cookies.
 3. In Supabase Authentication → URL Configuration, set the Site URL to `https://yoeo.onrender.com`. Add `https://yoeo.onrender.com/api/auth/callback`, `https://yoeo.onrender.com/?account=1&oauth=1`, and `https://yoeo.onrender.com/api/auth/native-callback` to Redirect URLs. Keep localhost entries only in a development project. Set both `APP_URL` and `API_PUBLIC_URL` to `https://yoeo.onrender.com` in Render.
 4. Complete the Google instructions below, test the flow, and only then set `AUTH_GOOGLE_ENABLED=true` in Render.
@@ -68,7 +68,7 @@ The SMTP password belongs only in Supabase, never in this repository or a `VITE_
 
 `auth.users` identifies an account. `person_profiles` identifies a person and stores name, allergen preferences and a small JPEG avatar. One account can own several profiles. Avatars default to a generic icon and uploaded photos are center-cropped to 256×256 before storage. Photos remain private inside the RLS-protected row.
 
-The account identifies subscription access and scan usage. Profiles and saved reports remain local to the device. Shared households, invitations, guardian roles, concurrent editing/conflict resolution and billing are future work.
+Purchases and restore work without an account. Optional sign-in links subscription access and syncs profiles and saved reports. Local data remains when signing out; data owned by another account is not silently uploaded to a new account. Shared households, invitations, guardian roles and collaborative conflict resolution are future work.
 
 ## App Store / Play Store path
 

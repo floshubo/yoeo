@@ -2,6 +2,7 @@ import {Router,json} from 'express';
 import {randomBytes,createHash,createCipheriv,createDecipheriv,randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {profileSchema} from './schema.mjs';
+import {savedReportSchema} from './saved-report.mjs';
 import {isAllowedOrigin} from './origins.mjs';
 export function googleProfilePhoto(user){
  const providers=user?.app_metadata?.providers||[];
@@ -39,6 +40,10 @@ export function authRouter(env=process.env){
  router.get('/account/profiles',route(async(req,res)=>{const {token,user}=await session(req,res);res.json(await request(`/rest/v1/person_profiles?owner_id=eq.${user.id}&select=id,name,allergens,avatar,completed&order=created_at.asc`,{token}));}));
  router.post('/account/profiles',route(async(req,res)=>{const {token,user}=await session(req,res);const p=z.object({id:z.uuid().optional(),name:z.string().trim().min(1).max(40),avatar:z.string().max(150000).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/).nullable().optional(),allergens:profileSchema,completed:z.boolean()}).parse(req.body);const id=p.id||randomUUID();if(p.id){const existing=await request(`/rest/v1/person_profiles?id=eq.${id}&owner_id=eq.${user.id}&select=id`,{token});if(!existing.length)fail(404,"Profile not found in this account.");}await request(`/rest/v1/person_profiles${p.id?`?id=eq.${id}&owner_id=eq.${user.id}`:''}`,{method:p.id?'PATCH':'POST',token,body:{...p,id,owner_id:user.id}});res.json({id});}));
  router.delete('/account/profiles/:id',route(async(req,res)=>{const {token,user}=await session(req,res);const id=z.uuid().parse(req.params.id);await request(`/rest/v1/person_profiles?id=eq.${id}&owner_id=eq.${user.id}`,{method:'DELETE',token});res.json({ok:true});}));
+ // Saved scan results are an optional account feature: they hold menu text and findings, never photos or payment data.
+ router.get('/account/reports',route(async(req,res)=>{const {token,user}=await session(req,res);const rows=await request(`/rest/v1/saved_reports?owner_id=eq.${user.id}&select=report&order=created_at.desc&limit=50`,{token});res.json((rows||[]).map(row=>row.report));}));
+ router.post('/account/reports',route(async(req,res)=>{const {token,user}=await session(req,res);const parsed=savedReportSchema.safeParse(req.body);if(!parsed.success||JSON.stringify(parsed.data).length>200000)fail(400,'This result cannot be synced.');const report=parsed.data;const existing=await request(`/rest/v1/saved_reports?id=eq.${report.id}&owner_id=eq.${user.id}&select=id`,{token});await request(existing?.length?`/rest/v1/saved_reports?id=eq.${report.id}&owner_id=eq.${user.id}`:'/rest/v1/saved_reports',{method:existing?.length?'PATCH':'POST',token,body:existing?.length?{report}:{id:report.id,owner_id:user.id,report,created_at:report.createdAt}});res.json({id:report.id});}));
+ router.delete('/account/reports/:id',route(async(req,res)=>{const {token,user}=await session(req,res);const id=z.uuid().parse(req.params.id);await request(`/rest/v1/saved_reports?id=eq.${id}&owner_id=eq.${user.id}`,{method:'DELETE',token});res.json({ok:true});}));
  router.post('/auth/password',route(async(req,res)=>{const {token}=await session(req,res);const password=z.string().min(12).max(128).parse(req.body.password);await request('/auth/v1/user',{method:'PUT',token,body:{password}});res.json({ok:true});}));
  router.delete('/account',route(async(req,res)=>{const {token}=await session(req,res);if(req.body.confirm!=='DELETE')fail(400,'Confirm account deletion.');await request('/rest/v1/rpc/delete_own_account',{method:'POST',token,body:{}});cookie(res,'yoeo_session',null,0);res.json({ok:true});}));
  router.getSession = session;

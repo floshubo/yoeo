@@ -7,7 +7,7 @@ YOEO is a menu-reading companion for people managing food allergies. Users set a
 1. Set the allergen profile and choose severity levels.
 2. Capture or upload a menu and, when available, its allergen legend.
 3. Review the structured result: dish names, evidence, warnings, and questions to ask staff.
-4. Save a report, sign in, and return to it later.
+4. Save a report on the device and return to it later; signing in is optional.
 5. Open the native subscription screen to see RevenueCat offerings and the entitlement-backed Pro experience.
 
 The AI analysis requires a network connection and a configured vision-model API. It is not an independent laboratory test of the food. When a menu is incomplete or ambiguous, the report should surface uncertainty rather than promise safety.

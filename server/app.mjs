@@ -17,7 +17,7 @@ export function createApp({ analyzeFn = analyze, env = process.env, usageOverrid
       res.set('Access-Control-Allow-Origin',origin);
       res.set('Vary','Origin');
       res.set('Access-Control-Allow-Methods','GET,POST,DELETE,OPTIONS');
-      res.set('Access-Control-Allow-Headers','Content-Type,Authorization,X-YOEO-Session,X-YOEO-Guest');
+      res.set('Access-Control-Allow-Headers','Content-Type,Authorization,X-YOEO-Session,X-YOEO-Guest,X-YOEO-Purchase-ID');
       if(req.method==='OPTIONS')return res.sendStatus(204);
     }
     next();

@@ -58,7 +58,7 @@ await page
   .click();
 await page.getByRole("button", { name: "Photo", exact: true }).click();
 await page
-  .getByRole("button", { name: "No, take the menu", exact: true })
+  .getByRole("button", { name: "No, upload the menu", exact: true })
   .click();
 await page
   .getByLabel("Upload menu photos")
@@ -129,7 +129,7 @@ await page
 await page.getByRole("button", { name: /Show all results/ }).click();
 await page.screenshot({ path: "test-results/results.png" });
 await page.getByRole("button", { name: "Save results", exact: true }).click();
-await page.getByRole("button", { name: "Start Analyzing", exact: true }).waitFor();
+await page.getByRole("heading", { name: "Saved Results" }).waitFor();
 await page
   .getByRole("navigation")
   .getByRole("button", { name: "Profile", exact: true })

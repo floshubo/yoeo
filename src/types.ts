@@ -1,6 +1,8 @@
 export type Severity = "Critical" | "Avoid" | "Safe";
 export type Preference = { name: string; severity: Severity };
 export type Profile = {
+  syncOwnerId?: string;
+  syncPending?: boolean;
   id?: string;
   avatar?: string;
   avatarOwnerId?: string;
@@ -33,6 +35,7 @@ export type Dish = {
   status: "Critical" | "Avoid" | "Uncertain";
 };
 export type Report = {
+  syncOwnerId?: string;
   legend?: {code:string;label:string;allergens:string[]}[];
   id: string;
   createdAt: string;

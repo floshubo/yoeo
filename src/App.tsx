@@ -29,8 +29,10 @@ import {acceptAccountSessionFromUrl,accountHeaders,apiUrl,clearAccountSession,co
 import { useI18n } from './i18n';
 
 import {useNavigation} from './useNavigation';
-import {configureRevenueCat, getRevenueCatCustomerInfo, hasProEntitlement, revenueCatIsNative} from './revenuecat';
 import {useProSubscription} from './useProSubscription';
+import {fetchScanUsage} from './usage';
+import {hasProEntitlement,purchaseErrorMessage,restoreRevenueCatPurchases,revenueCatIsNative,setRevenueCatAccount} from './revenuecat';
+import {accountSync,mergeReports,reportsForAccount} from './accountSync';
 acceptAccountSessionFromUrl();
 
 function pendingUpgrade(): {report: Report|null; active: boolean} {
@@ -92,11 +94,64 @@ export default function App() {
   const customAvatar=signedIn ? accountId && profile.avatarOwnerId===accountId ? profile.avatar : undefined : profile.avatar;
   const shownAvatar=customAvatar || (signedIn?accountAvatar:undefined) || undefined;
   const [scanUsage,setScanUsage]=useState<{enforced:boolean;plan:string;remaining:number|null}|null>(null);
-  const nativeSubscription = useProSubscription(accountId, signedIn, screen === 'profile');
+  const nativeSubscription = useProSubscription(screen === 'profile');
   const profileIsPro = nativeSubscription.pro === true || scanUsage?.plan === 'pro';
   const [checkingScanAccess,setCheckingScanAccess]=useState(false);
-  useEffect(()=>{let active=true;if(screen==='profile')fetch(apiUrl('/api/usage'),{headers:{'X-YOEO-Guest':localStorage.getItem('yoeo-guest-token')||'',...accountHeaders()}}).then(r=>r.ok?r.json():null).then(data=>{if(!active)return;if(data?.usageToken)localStorage.setItem('yoeo-guest-token',data.usageToken);setScanUsage(data);}).catch(()=>{if(active)setScanUsage(null);});return()=>{active=false;};},[screen,signedIn]);
+  useEffect(()=>{let active=true;if(screen==='profile')void fetchScanUsage().then(data=>{if(active)setScanUsage(data);}).catch(()=>{if(active)setScanUsage(null);});return()=>{active=false;};},[screen,signedIn,nativeSubscription.pro]);
   useEffect(()=>{if(!signedIn){setAccountEmail('');setAccountAvatar(null);setScanUsage(null);}},[signedIn]);
+  // Payment stays with the App Store account. Signing in links the optional YOEO account to that
+  // store customer so the subscription follows the account; signing out unlinks it again.
+  useEffect(()=>{if(!revenueCatIsNative()||(signedIn&&!accountId))return;void setRevenueCatAccount(signedIn?accountId:null).catch(()=>undefined);},[signedIn,accountId]);
+  const profileRef=useRef(profile);useEffect(()=>{profileRef.current=profile;},[profile]);
+  const savedRef=useRef(saved);useEffect(()=>{savedRef.current=saved;},[saved]);
+  const syncClient=useRef<ReturnType<typeof accountSync>|null>(null);
+  const [syncRevision,setSyncRevision]=useState(0);
+  const [syncError,setSyncError]=useState(false);
+  useEffect(()=>{const retry=()=>{if(document.visibilityState==='visible')setSyncRevision(n=>n+1);};window.addEventListener('online',retry);document.addEventListener('visibilitychange',retry);return()=>{window.removeEventListener('online',retry);document.removeEventListener('visibilitychange',retry);};},[]);
+  const pendingDeletes=(owner:string):string[]=>readStored<Record<string,string[]>>('yoeo-pending-report-deletes',{})[owner]||[];
+  function finishDelete(owner:string,id:string){const all=readStored<Record<string,string[]>>('yoeo-pending-report-deletes',{});writeStored('yoeo-pending-report-deletes',{...all,[owner]:(all[owner]||[]).filter(value=>value!==id)});}
+  function syncProfile(p:Profile){
+    const client=syncClient.current;
+    if(!client||!p.completed||!p.name.trim()||(p.syncOwnerId&&p.syncOwnerId!==client.ownerId))return;
+    void client.pushProfile(p).then(({id})=>{if(syncClient.current!==client)return;const current=profileRef.current;if(current.syncOwnerId&&current.syncOwnerId!==client.ownerId)return;const next={...current,id,syncOwnerId:client.ownerId,syncPending:current===p?false:current.syncPending};writeStored('yoeo-profile',next);profileRef.current=next;setProfile(next);}).catch(()=>{if(syncClient.current===client)setSyncError(true);});
+  }
+  useEffect(()=>{
+    if(!accountId){syncClient.current=null;setSyncError(false);return;}
+    let active=true;
+    const client=accountSync(accountId);syncClient.current=client;setSyncError(false);
+    (async()=>{
+      // Scan history: the account's copies plus anything saved on this device before signing in.
+      try{
+        const deletions=pendingDeletes(accountId);
+        for(const id of deletions){if(!active)return;await client.removeReport(id);finishDelete(accountId,id);}
+        const beforePull=savedRef.current;
+        const cloud=await client.pullReports();if(!active)return;
+        // A stale response must not resurrect a deletion or replace a result just saved.
+        if(savedRef.current!==beforePull){setSyncRevision(n=>n+1);return;}
+        const local=savedRef.current.map(r=>!r.syncOwnerId?{...r,syncOwnerId:accountId}:r);
+        const merged=mergeReports(local,cloud.filter(r=>!pendingDeletes(accountId).includes(r.id)));
+        writeStored('yoeo-reports',merged);savedRef.current=merged;setSaved(merged);
+        const cloudIds=new Set(cloud.map(r=>r.id));
+        for(const report of reportsForAccount(local,accountId).filter(r=>!cloudIds.has(r.id))){if(!active)return;await client.pushReport(report);}
+      }catch{if(active)setSyncError(true);}
+      // Allergen profile: a completed account profile wins; one set up before signing in is uploaded.
+      try{
+        if(!active)return;
+        const [cloud]=await client.pullProfiles();if(!active)return;
+        const local=profileRef.current;
+        if(local.syncOwnerId===accountId&&local.syncPending){syncProfile(local);}
+        else if(cloud?.completed){
+          const avatar=cloud.avatar||(!local.syncOwnerId||local.syncOwnerId===accountId?local.avatar:undefined);
+          const next:Profile={...local,id:cloud.id,name:cloud.name,allergens:cloud.allergens,completed:true,avatar,avatarOwnerId:avatar?accountId:undefined,syncOwnerId:accountId,syncPending:false};
+          writeStored('yoeo-profile',next);profileRef.current=next;setProfile(next);
+          if(!cloud.avatar&&avatar)syncProfile(next);
+        }else if(local.completed&&local.name.trim()&&(!local.syncOwnerId||local.syncOwnerId===accountId)){
+          const next={...local,id:cloud?.id,syncOwnerId:accountId,syncPending:true};writeStored('yoeo-profile',next);profileRef.current=next;setProfile(next);syncProfile(next);
+        }
+      }catch{if(active)setSyncError(true);}
+    })();
+    return()=>{active=false;if(syncClient.current===client)syncClient.current=null;};
+  },[accountId,syncRevision]);
   useEffect(()=>{void completeOAuthFromUrl().then(completed=>{if(completed)setSignedIn(true);}).catch(e=>setToast(e instanceof Error?e.message:'Sign-in did not complete.')).finally(()=>setAuthReady(true));},[]);
   useEffect(()=>{
     if(!Capacitor.isNativePlatform())return;
@@ -116,9 +171,6 @@ export default function App() {
     }).catch(()=>{if(active){setSignedIn(hasAccountSession());setAccountId(null);}});
     return()=>{active=false;};
   },[signedIn]);
-  useEffect(()=>{
-    if(screen==='saved'&&!signedIn&&authReady){sessionStorage.setItem('yoeo-account-return','saved');setAccountReturn('saved');go('account',true);}
-  },[screen,signedIn,authReady]);
   useEffect(()=>{
     if(screen==='account'&&accountId&&accountReturn){const destination=accountReturn;sessionStorage.removeItem('yoeo-account-return');setAccountReturn(null);go(destination,true);}
   },[screen,accountId,accountReturn]);
@@ -156,8 +208,10 @@ export default function App() {
   }, [screen]);
   function persist(p: Profile) {
     try {
-      writeStored("yoeo-profile", p);
-      setProfile(p);
+      const next=signedIn&&accountId?{...p,id:p.syncOwnerId===accountId?p.id:undefined,syncOwnerId:accountId,syncPending:true}:{...p,id:undefined,syncOwnerId:undefined,syncPending:false};
+      writeStored("yoeo-profile", next);profileRef.current=next;
+      setProfile(next);
+      if (signedIn && accountId) syncProfile(next);
       return true;
     } catch {
       setToast("Could not save. Your browser storage may be full or disabled.");
@@ -178,10 +232,16 @@ export default function App() {
   }
   function persistReport(r: Report) {
     try {
-      const next = [r, ...saved.filter((x) => x.id !== r.id)].slice(0, 50);
+      const result=signedIn&&accountId&&!r.syncOwnerId?{...r,syncOwnerId:accountId}:r;
+      const next = [result, ...savedRef.current.filter((x) => x.id !== r.id)].slice(0, 50);
       writeStored("yoeo-reports", next);
-      setSaved(next);
+      savedRef.current=next;setSaved(next);
       setToast("Results saved on this device");
+      const client=syncClient.current;
+      if(client&&(!result.syncOwnerId||result.syncOwnerId===accountId)){
+        finishDelete(client.ownerId,r.id);
+        void client.pushReport(result).catch(()=>{if(syncClient.current===client)setSyncError(true);});
+      }
       return true;
     } catch {
       setToast(
@@ -190,94 +250,77 @@ export default function App() {
       return false;
     }
   }
+  function deleteSavedReport(id:string){
+    try{
+      const result=savedRef.current.find(r=>r.id===id);
+      const client=syncClient.current;
+      const shouldSync=client&&(!result?.syncOwnerId||result.syncOwnerId===client.ownerId);
+      if(shouldSync){const all=readStored<Record<string,string[]>>('yoeo-pending-report-deletes',{});writeStored('yoeo-pending-report-deletes',{...all,[client.ownerId]:[...new Set([...(all[client.ownerId]||[]),id])]});}
+      const next=savedRef.current.filter(r=>r.id!==id);writeStored('yoeo-reports',next);savedRef.current=next;setSaved(next);
+      if(shouldSync)void client.removeReport(id).then(()=>finishDelete(client.ownerId,id)).catch(()=>{if(syncClient.current===client)setSyncError(true);});
+    }catch{setToast('Could not update saved results.');}
+  }
   const navigate = (s: string) => {
-    if(s==='saved'&&!signedIn){sessionStorage.setItem('yoeo-account-return','saved');setAccountReturn('saved');go('account');}
-    else go(s);
+    go(s);
     setSheet(false);
   };
   async function startScan(){
     if(checkingScanAccess)return;
     setCheckingScanAccess(true);
     try{
-      const response=await fetch(apiUrl('/api/usage'),{headers:{'X-YOEO-Guest':localStorage.getItem('yoeo-guest-token')||'',...accountHeaders()}});
-      if(!response.ok)throw Error();
-      const usage=await response.json();
-      if(usage.usageToken)localStorage.setItem('yoeo-guest-token',usage.usageToken);
+      const usage=await fetchScanUsage();
       setScanUsage(usage);
       if(usage.enforced&&usage.plan!=='pro'&&(usage.remaining??0)<=0){setPremiumReason('scans');return;}
       setSheet(true);
     }catch{setToast(t('Could not check your scan availability. Please try again.'));}
     finally{setCheckingScanAccess(false);}
   }
-  const [premiumReason, setPremiumReason] = useState<'save'|'scans'|null>(null);
-  const [pendingSave, setPendingSave] = useState<Report|null>(() => pendingUpgrade().report);
+  const [premiumReason, setPremiumReason] = useState<'scans'|null>(null);
   const [checkingSave, setCheckingSave] = useState(false);
   const saveLock = useRef(false);
   const [upgradeFlow, setUpgradeFlow] = useState(() => pendingUpgrade().active);
+  // Shown once after the first purchase: an account is optional and only adds restore/sync across devices.
+  const [linkPrompt,setLinkPrompt]=useState(false);
+  const [accountMode,setAccountMode]=useState<'signin'|'signup'>('signin');
+  const linkPromptSeen=()=>{try{return !!localStorage.getItem('yoeo-link-prompt-seen');}catch{return true;}};
+  const markLinkPromptSeen=()=>{try{localStorage.setItem('yoeo-link-prompt-seen','1');}catch{/* Shown again next time. */}};
+  const [restoring,setRestoring]=useState(false);
   useEffect(() => {
     if (screen === 'account' || screen === 'subscription') return;
     setUpgradeFlow(false);
+    setAccountMode('signin');
     sessionStorage.removeItem('yoeo-upgrade');
   }, [screen]);
-  async function checkPremium() {
-    if (revenueCatIsNative()) {
-      let userId = accountId;
-      if (!userId && hasAccountSession()) {
-        const response = await fetch(apiUrl('/api/auth/session'), {headers: accountHeaders()});
-        if (!response.ok) throw Error('Please sign in again to check your subscription.');
-        const session = await response.json(); userId = session.user.id;
-      }
-      return hasProEntitlement(await getRevenueCatCustomerInfo(userId));
-    }
-    const response = await fetch(apiUrl('/api/usage'), {headers: {'X-YOEO-Guest': localStorage.getItem('yoeo-guest-token') || '', ...accountHeaders()}});
-    if (!response.ok) throw Error('Could not check your subscription. Please try again.');
-    const usage = await response.json();
-    if (usage.usageToken) localStorage.setItem('yoeo-guest-token', usage.usageToken);
-    return usage.plan === 'pro';
-  }
   function finishSave(r: Report) {
     if (!persistReport(r)) return;
     sessionStorage.removeItem('yoeo-upgrade');
-    setPendingSave(null); setUpgradeFlow(false);
-    reset('saved');
-  }
-  function continueSaveUpgrade(r: Report) {
-    setPendingSave(r);
-    sessionStorage.setItem('yoeo-upgrade', JSON.stringify({report:r, active:false}));
     setUpgradeFlow(false);
-    navigate('account');
+    reset('saved');
   }
   async function saveReport(r: Report) {
     if (saveLock.current) return;
     saveLock.current = true; setCheckingSave(true);
     try {
-      if (signedIn && hasAccountSession()) finishSave(r);
-      else continueSaveUpgrade(r);
+      finishSave(r);
     } catch {setToast('Could not save results. Please try again.');}
     finally {saveLock.current = false; setCheckingSave(false);}
   }
   function completeUpgrade() {
-    if (!hasAccountSession()) {
-      sessionStorage.setItem('yoeo-upgrade', JSON.stringify({report:pendingSave, active:true}));
-      setUpgradeFlow(true); navigate('account'); return;
-    }
-    if (pendingSave) finishSave(pendingSave);
-    else {sessionStorage.removeItem('yoeo-upgrade');setUpgradeFlow(false);reset('home');}
+    setScanUsage(null);
+    sessionStorage.removeItem('yoeo-upgrade');setUpgradeFlow(false);reset('home');
   }
-  useEffect(() => {
-    if (screen !== 'account' || !accountId || !pendingSave || upgradeFlow) return;
-    finishSave(pendingSave);
-  }, [screen, accountId, pendingSave, upgradeFlow]);
-  useEffect(() => {
-    if (screen !== 'account' || !accountId || !upgradeFlow) return;
-    let active = true;
-    void checkPremium().then(pro => {
-      if (!active) return;
-      if (pro) completeUpgrade();
-      else go('subscription', true);
-    }).catch(() => {if (active) go('subscription', true);});
-    return () => {active = false;};
-  }, [screen, accountId, upgradeFlow]);
+  async function restorePurchases() {
+    if (restoring) return;
+    setRestoring(true);
+    try {
+      const info = await restoreRevenueCatPurchases();
+      setScanUsage(null);
+      setToast(hasProEntitlement(info) ? t('Purchases restored. YOEO Pro is active.') : t('No active YOEO Pro purchase was found for this store account.'));
+    } catch (error) {
+      const text = purchaseErrorMessage(error);
+      if (text) setToast(text);
+    } finally {setRestoring(false);}
+  }
   const nextCategory = () => {
     if (!choice) return;
     const g = groups[category];
@@ -565,7 +608,6 @@ export default function App() {
       {(screen === "scan" || scanSession) && (
         <div hidden={screen !== "scan"} style={{height:'100%'}}><Scanner
           active={screen === "scan"}
-          onAccount={()=>setPremiumReason('scans')}
           onUpgrade={()=>setPremiumReason('scans')}
           mode={scanMode}
           profile={profile.allergens}
@@ -630,11 +672,11 @@ export default function App() {
           <Navigation active="profile" onChange={navigate} />
         </div>
       )}
-      {signedIn&&<div hidden={screen !== "saved"} style={{height:'100%'}}><SavedReports reports={saved} onBack={back} avatar={shownAvatar} navigate={navigate} onOpen={r=>{setReport(r);setFromSaved(true);navigate('results');}} onDelete={id=>{try{const next=saved.filter(r=>r.id!==id);writeStored('yoeo-reports',next);setSaved(next);}catch{setToast('Could not update saved results.');}}}/></div>}
-      {screen === 'account' && (authReady?<Account signedIn={signedIn} savingResult={!!pendingSave} onAuthChange={setSignedIn} onBack={()=>{sessionStorage.removeItem('yoeo-account-return');setAccountReturn(null);back();}}/>:<div className="page account-page"><Topbar title="Account" onBack={back}/><div className="scroll-body padded account-content"><p role="status">Completing sign in…</p></div></div>)}
+      {<div hidden={screen !== "saved"} style={{height:'100%'}}><SavedReports reports={saved} onBack={back} avatar={shownAvatar} navigate={navigate} onOpen={r=>{setReport(r);setFromSaved(true);navigate('results');}} onDelete={deleteSavedReport}/></div>}
+      {screen === 'account' && (authReady?<Account signedIn={signedIn} initialMode={accountMode} onAuthChange={setSignedIn} onBack={()=>{sessionStorage.removeItem('yoeo-account-return');setAccountReturn(null);back();}}/>:<div className="page account-page"><Topbar title="Account" onBack={back}/><div className="scroll-body padded account-content"><p role="status">Completing sign in…</p></div></div>)}
       {screen === 'reset-password' && <ResetPassword onBack={back} onSignIn={()=>navigate('account')}/>}
       {screen === "sources" && <DataSources onBack={back} avatar={shownAvatar} navigate={navigate}/>}
-      {screen === "subscription" && <Subscription onBack={back} onActivated={upgradeFlow ? completeUpgrade : undefined} onSignIn={()=>{if(!upgradeFlow)setPendingSave(null);sessionStorage.setItem('yoeo-upgrade', JSON.stringify({report:upgradeFlow?pendingSave:null,active:true}));setUpgradeFlow(true);navigate('account');}} appUserId={accountId}/>}
+      {screen === "subscription" && <Subscription signedIn={signedIn} onBack={back} onActivated={event=>{if(event==='purchase'&&!signedIn&&!linkPromptSeen()){markLinkPromptSeen();setLinkPrompt(true);}if(upgradeFlow)completeUpgrade();}} onSignIn={()=>{sessionStorage.setItem('yoeo-account-return','subscription');setAccountReturn('subscription');navigate('account');}}/>}
       {screen === "settings" && (
         <div className="page settings-page">
           <Topbar title={t('Settings')} onBack={back} />
@@ -654,8 +696,10 @@ export default function App() {
             </form>
             <section className="settings-card">
               <h3>{t('Account')}</h3>
+              {signedIn&&<><p className="privacy-note" role="status">{t(syncError?'Your changes are saved on this device. Cloud sync could not finish.':'Your account can sync your profile and saved results. Local data stays on this device when you sign out.')}</p><Button secondary onClick={()=>setSyncRevision(value=>value+1)}>{t('Sync account data')}</Button></>}
               <label className="field">{t('Email address')}<input type="email" value={accountEmail} readOnly placeholder={t('Sign in to connect your email')} /></label>
               {signedIn ? <button type="button" className="profile-setting" onClick={() => navigate('reset-password')}><Icon name="password"/><span>{t('Reset password')}</span></button> : <Button secondary onClick={() => navigate('account')}>{t('Sign in or create account')}</Button>}
+              {revenueCatIsNative()&&<button type="button" className="profile-setting" disabled={restoring} onClick={()=>void restorePurchases()}>{t(restoring?'Restoring…':'Restore Purchases')}</button>}
               <button type="button" className="profile-setting" onClick={()=>{const platform=Capacitor.getPlatform();if(platform==='ios')void openExternal('https://apps.apple.com/account/subscriptions');else if(platform==='android')void openExternal('https://play.google.com/store/account/subscriptions');else void openExternal('https://support.apple.com/en-us/118428');}}>{t('Manage or cancel subscription')}</button>
               <p className="privacy-note">{t('Deleting your YOEO account does not cancel a subscription. Manage it through the store account used to purchase it.')}</p>
             </section>
@@ -687,10 +731,18 @@ export default function App() {
       )}
       {premiumReason && <Modal label={t('Unlock YOEO Pro')} onClose={()=>setPremiumReason(null)}>
         <div className="modal-heading"><h2>{t('Unlock YOEO Pro')}</h2><IconButton name="close" label={t('Close')} onClick={()=>setPremiumReason(null)}/></div>
-        <p>{t(premiumReason === 'save' ? 'Save results and revisit them anytime with YOEO Pro.' : 'You’ve used your three free scans. Get YOEO Pro to keep analyzing.')}</p>
+        <p>{t('You’ve used your three free scans. Get YOEO Pro to keep analyzing.')}</p>
         <p>{t('Unlimited analyses and saved results, all in one plan.')}</p>
-        <Button onClick={()=>{sessionStorage.setItem('yoeo-upgrade', JSON.stringify({report:premiumReason==='save'?pendingSave:null, active:true}));if(premiumReason!=='save')setPendingSave(null);setPremiumReason(null);setUpgradeFlow(true);navigate(signedIn ? 'subscription' : 'account');}}>{t(signedIn ? 'Upgrade to Pro' : 'Sign up or sign in to upgrade')}</Button>
+        <p>{t('No YOEO account needed. Purchase and restore with your store account.')}</p>
+        <Button onClick={()=>{sessionStorage.setItem('yoeo-upgrade', JSON.stringify({report:null, active:true}));setPremiumReason(null);setUpgradeFlow(true);navigate('subscription');}}>{t('Upgrade to Pro')}</Button>
         <Button secondary onClick={()=>setPremiumReason(null)}>{t('Not now')}</Button>
+      </Modal>}
+      {linkPrompt && <Modal label={t('Keep Pro on every device')} onClose={()=>setLinkPrompt(false)}>
+        <div className="modal-heading"><h2>{t('Keep Pro on every device')}</h2><IconButton name="close" label={t('Close')} onClick={()=>setLinkPrompt(false)}/></div>
+        <p>{t('Create an account to sync your history and access your subscription on other platforms, including Android.')}</p>
+        <p>{t('Your purchase already works. Restore Purchases also works on your other Apple devices without a YOEO account. Creating an account is optional.')}</p>
+        <Button onClick={()=>{setLinkPrompt(false);setAccountMode('signup');navigate('account');}}>{t('Create account')}</Button>
+        <Button secondary onClick={()=>setLinkPrompt(false)}>{t('Maybe later')}</Button>
       </Modal>}
       {sheet && (
         <Modal
@@ -793,7 +845,7 @@ export default function App() {
           {deletionStatus==='idle' && <div className="confirm-dialog danger-dialog">
             <div className="danger-dialog-icon"><Icon name="trash" size={28}/></div>
             <div className="modal-heading"><h2>{t('Delete data?')}</h2><IconButton name="close" label={t('Close')} onClick={() => setConfirmClear(false)}/></div>
-            {hasAccountSession() && <p>Deleting your data does not cancel an App Store or Google Play subscription. Cancel it in your store subscription settings to stop future charges.</p>}
+            <p>Deleting your data does not cancel an App Store or Google Play subscription. Cancel it in your store subscription settings to stop future charges.</p>
             <p>{hasAccountSession()?t('This permanently deletes your YOEO account and its app database records, then removes your local YOEO profile and saved results from this device.'):t('This permanently removes all data stored by this app on this device.')}</p>
             <Button
               danger
@@ -805,7 +857,6 @@ export default function App() {
                   if(includesAccount){
                     const r=await fetch(apiUrl('/api/account'),{method:'DELETE',headers:{'Content-Type':'application/json',...accountHeaders()},body:JSON.stringify({confirm:'DELETE'})});
                     if(!r.ok){const d=await r.json().catch(()=>null);throw Error(d?.error||'Could not delete your account.');}
-                    if(revenueCatIsNative())await configureRevenueCat(null).catch(()=>{});
                   }
                   localStorage.clear();
                   sessionStorage.clear();
@@ -814,7 +865,6 @@ export default function App() {
                   setSaved([]);
                   setName('');
                   setReport(null);
-                  setPendingSave(null);
                   setUpgradeFlow(false);
                   setAccountId(null);
                   setSignedIn(false);

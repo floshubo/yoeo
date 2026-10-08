@@ -4,30 +4,26 @@ import {getRevenueCatCustomerInfo, hasProEntitlement, listenForCustomerInfo, rev
 import type {CustomerInfo} from '@revenuecat/purchases-capacitor';
 
 /** Keep the profile in sync with native purchases, restores and foreground refreshes. */
-export function useProSubscription(appUserId: string | null, signedIn: boolean, profileVisible: boolean) {
+export function useProSubscription(profileVisible: boolean) {
   const native = revenueCatIsNative();
-  const ready = !signedIn || !!appUserId;
-  const identity = signedIn ? appUserId : null;
-  const [status, setStatus] = useState<{identity: string | null; pro: boolean | null} | null>(null);
+  const [status, setStatus] = useState<{pro: boolean | null} | null>(null);
 
   useEffect(() => {
-    // Wait for authentication before configuring an anonymous SDK customer.
-    if (!native || !ready) return;
+    if (!native) return;
     let active = true;
     let revision = 0;
     let stop: (() => void) | undefined;
     const update = (customerInfo: CustomerInfo | null) => {
-      if (active) setStatus({identity, pro: hasProEntitlement(customerInfo)});
+      if (active) setStatus({pro: hasProEntitlement(customerInfo)});
     };
     const refresh = async () => {
       const requestRevision = ++revision;
       try {
-        const info = await getRevenueCatCustomerInfo(identity);
+        const info = await getRevenueCatCustomerInfo();
         if (active && requestRevision === revision) update(info);
       } catch {
         // Preserve a known entitlement during a transient network/store failure.
-        if (active && requestRevision === revision) setStatus(current =>
-          current?.identity === identity ? current : {identity, pro: null});
+        if (active && requestRevision === revision) setStatus(current => current || {pro: null});
       }
     };
     void refresh().then(() => {
@@ -42,10 +38,10 @@ export function useProSubscription(appUserId: string | null, signedIn: boolean, 
       document.removeEventListener('visibilitychange', onVisibility);
       void appListener.then(listener => listener.remove());
     };
-  }, [native, ready, identity, profileVisible]);
+  }, [native, profileVisible]);
 
   return {
-    pro: native && ready && status?.identity === identity ? status.pro : null,
-    checking: native && (!ready || status?.identity !== identity),
+    pro: native ? status?.pro ?? null : null,
+    checking: native && status === null,
   };
 }

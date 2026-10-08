@@ -7,18 +7,17 @@ const browser = await chromium.launch({headless:true});
 const page = await browser.newPage({viewport:{width:390,height:844}});
 const errors=[];
 page.on('pageerror', e=>errors.push(e.message));
-let pro=false, authenticated=false, limit=false, unavailable=false;
-const report={id:'navigation-test',createdAt:new Date().toISOString(),title:'Test menu',model:'test',sourceType:'menu',readable:true,summary:'Test',profileSnapshot:[],warnings:[],dishes:[{id:'dish',name:'Soup',description:'Soup',ingredients:[],allergens:[],uncertainties:[],questions:[],status:'Uncertain'}]};
+// exhausted: the availability check reports no free scans; blocked: the analysis itself is refused.
+let exhausted=false, blocked=false, unavailable=false;
+const report={id:'navigation-test',createdAt:new Date().toISOString(),title:'Test menu',model:'test',sourceType:'menu',readable:true,summary:'Test',profileSnapshot:[],warnings:[],dishes:[{id:'dish',name:'Soup',description:'Cream soup',ingredients:['cream'],allergens:[{name:'Milk',evidence:'cream',certainty:'declared',severity:'Critical'}],uncertainties:[],questions:[],status:'Critical'}]};
 await page.route('**/api/**', async route=>{
  const url=new URL(route.request().url());
  let body={},status=200;
  if(url.pathname==='/api/health')body={configured:true};
- if(url.pathname==='/api/usage'){body={enforced:true,plan:pro?'pro':'free',remaining:limit?0:3};if(unavailable)status=503;}
+ if(url.pathname==='/api/usage'){body={enforced:true,plan:'free',remaining:exhausted?0:3};if(unavailable)status=503;}
  if(url.pathname==='/api/auth/config')body={enabled:true,providers:{google:false,apple:false}};
- if(url.pathname==='/api/auth/verify'){authenticated=true;body={sessionToken:'test-session'};}
- if(url.pathname==='/api/auth/session'){status=authenticated?200:401;body=authenticated?{user:{id:'test-user',email:'test@example.com'},sessionToken:'test-session'}:{};}
- if(url.pathname==='/api/account/profiles')body=[];
- if(url.pathname==='/api/analyze'){status=limit?401:200;body=limit?{code:'SIGN_IN_REQUIRED',error:'Three free scans used'}:report;}
+ if(url.pathname==='/api/auth/session')status=401;
+ if(url.pathname==='/api/analyze'){status=blocked?402:200;body=blocked?{code:'SCAN_LIMIT_REACHED',error:'Your three free scans are used. Upgrade to Pro to keep scanning.'}:report;}
  await route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
 });
 await page.addInitScript(()=>{
@@ -27,8 +26,9 @@ await page.addInitScript(()=>{
 });
 const screen=async name=>page.locator(`.screen-${name}`).waitFor();
 const button=name=>page.getByRole('button',{name,exact:true});
+const offer=()=>page.getByRole('dialog',{name:'Unlock YOEO Pro'});
 async function scan(){
- await button('Start Analyzing').click();await button('Photo').click();await button('No, take the menu').click();
+ await button('Start Analyzing').click();await button('Photo').click();await button('No, upload the menu').click();
  await page.getByLabel('Upload menu photos').setInputFiles('public/icon-192.png');
  await page.getByRole('checkbox',{name:/I agree to send/}).check();
  await button('Analyze 1 photo').click();
@@ -44,28 +44,29 @@ try {
  await page.getByRole('button',{name:/Add allergen/}).click();await page.goBack();
  await page.getByRole('dialog').waitFor({state:'hidden'});await screen('allergens');
  await button('Go back').click();await screen('home');
- await scan();await button('Show all results').or(page.getByRole('button',{name:/Show all results/})).first().click();
- await button('Save results').click();await page.getByRole('dialog',{name:'Unlock YOEO Pro'}).waitFor();
- assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),0);
- await button('Not now').click();await screen('results');
- unavailable=true;await button('Save results').click();await page.getByRole('status').filter({hasText:'Could not check your subscription'}).waitFor();
- assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),0);unavailable=false;
- await button('Save results').click();await button('Sign up or sign in to upgrade').click();await screen('account');
- await button('Go back').click();await screen('results');await button('Save results').waitFor();
- await button('Save results').click();await button('Sign up or sign in to upgrade').click();
- await page.getByLabel('Email address').fill('test@example.com');await button('Continue with email').click();
- await page.getByLabel('Email code').fill('123456');pro=true;await button('Verify and sign in').click();await screen('home');
- assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')).length),1);
- await page.getByRole('navigation').getByRole('button',{name:'Profile',exact:true}).click();await button('Saved Results').click();
- await page.getByRole('tab',{name:'Uncertain',exact:true}).click();await page.getByRole('heading',{name:'Test menu'}).click();await screen('results');
+ await scan();await page.getByRole('button',{name:/Show all results/}).first().click();
+ // Saving never asks for a YOEO account or a subscription: results stay on the device.
+ await button('Save results').click();await screen('saved');
+ assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),1);
+ assert.equal(await page.getByRole('dialog').count(),0);
+ await page.getByRole('tab',{name:'Critical',exact:true}).click();await page.getByRole('heading',{name:'Test menu'}).click();await screen('results');
  await button('Go back').click();await screen('saved');
- assert.equal(await page.getByRole('tab',{name:'Uncertain',exact:true}).getAttribute('aria-selected'),'true');
- await page.getByRole('navigation').getByRole('button',{name:'Home',exact:true}).click();
- limit=true;pro=false;await scan();await button('Sign in to continue').click();
- await page.getByRole('dialog',{name:'Unlock YOEO Pro'}).waitFor();
- await button('Upgrade to Pro').click();await screen('subscription');
- await button('Go back').click();await screen('scan');
+ assert.equal(await page.getByRole('tab',{name:'Critical',exact:true}).getAttribute('aria-selected'),'true');
+ await page.getByRole('navigation').getByRole('button',{name:'Home',exact:true}).click();await screen('home');
+ // A failed availability check is reported; the scanner does not open.
+ unavailable=true;await button('Start Analyzing').click();await page.getByRole('status').filter({hasText:'Could not check your scan availability'}).waitFor();unavailable=false;
+ // An exhausted allowance opens the Pro offer directly, with no sign-in step.
+ exhausted=true;await button('Start Analyzing').click();await offer().waitFor();
+ assert.equal(await offer().getByRole('button',{name:/sign/i}).count(),0);
+ await offer().getByRole('button',{name:'Upgrade to Pro',exact:true}).click();await screen('subscription');
+ assert.equal(await page.getByRole('button',{name:/sign in to continue/i}).count(),0);
+ await page.getByText('No YOEO account needed').first().waitFor();
+ await button('Close subscription').click();await screen('home');exhausted=false;
+ // When the server refuses the scan, the same offer appears and the photo is kept.
+ blocked=true;await scan();await button('Upgrade to Pro').click();await offer().waitFor();
+ await offer().getByRole('button',{name:'Upgrade to Pro',exact:true}).click();await screen('subscription');
+ await button('Close subscription').click();await screen('scan');
  assert.equal(await page.getByAltText('Menu or food to analyze').count(),1);
  assert.deepEqual(errors,[]);
- console.log('Passed: back navigation, severity/filter preservation, modal Back, premium gating, failed checks, canceled upgrade, sign-in/save/home, saved-report Back, scan-limit CTA and retained photo.');
+ console.log('Passed: back navigation, severity/filter preservation, modal Back, account-free saving, failed availability check, exhausted-allowance offer without sign-in, scan-limit CTA and retained photo.');
 } finally {await browser.close();}

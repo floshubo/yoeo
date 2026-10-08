@@ -66,7 +66,7 @@ Until the offering is current and contains those packages, the app displays **Pr
 
 ## Implemented purchase lifecycle
 
-`configureRevenueCat()` selects the platform SDK key, enables informational trusted-entitlement verification, and configures RevenueCat once. A signed-in Supabase UUID becomes the RevenueCat App User ID. Email addresses are never used as identifiers. If the SDK starts anonymously and sign-in completes later, `Purchases.logIn()` connects the customer to the account.
+`configureRevenueCat()` selects the platform SDK key, enables informational trusted-entitlement verification, and configures RevenueCat once. The SDK starts with RevenueCat's anonymous App User ID. YOEO sign-in calls `Purchases.logIn()` with the Supabase user ID so the store customer is linked to the account, and sign-out calls `logOut()`; email addresses are never used as identifiers. A cached account identity is kept across launches while its YOEO session exists and is logged out otherwise.
 
 The subscription screen:
 
@@ -79,7 +79,7 @@ The subscription screen:
 - shows the custom paywall with live store prices; and
 - presents Customer Center for an active customer.
 
-The server also checks the same customer through RevenueCat `GET /v1/subscribers/{app_user_id}` when Supabase still reports a free plan. Set `REVENUECAT_SERVER_API_KEY` on the API deployment before release so a valid `yoeo_pro` purchase bypasses the three-scan limit. For larger production traffic, add an authenticated RevenueCat webhook that updates `scan_accounts`; webhooks require an eligible RevenueCat plan and should use HMAC verification and idempotent event handling.
+The server verifies the anonymous customer sent in the `X-YOEO-Purchase-ID` header through RevenueCat `GET /v1/subscribers/{app_user_id}` before every paid scan, and still checks a signed-in account's entitlement when Supabase reports a free plan. Set `REVENUECAT_SERVER_API_KEY` on the API deployment before release so a valid `yoeo_pro` purchase bypasses the three-scan limit. For larger production traffic, add an authenticated RevenueCat webhook that updates `scan_accounts`; webhooks require an eligible RevenueCat plan and should use HMAC verification and idempotent event handling.
 
 ## Run and test
 
@@ -96,7 +96,7 @@ pnpm run build -- --mode revenuecat-test
 pnpm exec cap sync
 ```
 
-This build permits an anonymous RevenueCat Test Store purchase without a YOEO account. RevenueCat creates a device-local `$RCAnonymousID` automatically. The Test Store purchase modal can simulate success, failure, or cancellation without charging a payment method. Production builds still require YOEO sign in before purchase so the server can verify Pro access against the same Supabase UUID.
+This build permits an anonymous RevenueCat Test Store purchase without a YOEO account. RevenueCat creates a device-local `$RCAnonymousID` automatically. The Test Store purchase modal can simulate success, failure, or cancellation without charging a payment method. Production builds behave the same way: purchases, restores and paid scans never require a YOEO account.
 
 On macOS, prepare and open iOS with:
 
@@ -107,7 +107,7 @@ pnpm native:open:ios
 
 Do not put the `test_...` key in `.env.production` or ship a `revenuecat-test` build to TestFlight or the App Store. Production uses `VITE_REVENUECAT_IOS_API_KEY=appl_...`; the Test Store build selects the separate public Test Store key automatically.
 
-Test all three products, cancellation, restore after reinstall, account switching, expiration, billing retry, and offline startup. Confirm the RevenueCat customer is the same Supabase UUID on both platforms and that `yoeo_pro` is active after each successful purchase.
+Test all three products, cancellation, restore after reinstall, account switching, expiration, billing retry, and offline startup. Confirm `yoeo_pro` is active after each successful purchase while signed out of YOEO, and that signing in or out does not change it.
 
 ## App Store Connect
 

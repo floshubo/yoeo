@@ -50,3 +50,31 @@ test('password signup creates a session with email and password only',async()=>{
  globalThis.fetch=async(url,options)=>{if(String(url).startsWith('http://127.0.0.1:'))return networkFetch(url,options);assert.equal(String(url),'https://example.invalid/auth/v1/signup');upstreamBody=JSON.parse(options.body);return new Response(JSON.stringify({access_token:'access',refresh_token:'refresh',expires_in:3600,user:{id:'user-1',email:'alex@example.com'}}));};
  try{await withApp(configured,async base=>{const response=await networkFetch(base+'/api/auth/signup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'alex@example.com',password:'a-long-test-password'})});assert.equal(response.status,200);const data=await response.json();assert.equal(data.user.email,'alex@example.com');assert.ok(data.sessionToken.length>20);assert.deepEqual(upstreamBody,{email:'alex@example.com',password:'a-long-test-password'});});}finally{globalThis.fetch=networkFetch;}
 });
+test('saved results sync requires a session, validates the report and stores it for the owner',async()=>{
+ const networkFetch=globalThis.fetch;const upstream=[];
+ globalThis.fetch=async(url,options={})=>{
+  if(String(url).startsWith('http://127.0.0.1:'))return networkFetch(url,options);
+  const route=new URL(String(url));upstream.push({path:route.pathname+route.search,method:options.method||'GET',body:options.body?JSON.parse(options.body):undefined});
+  if(route.pathname==='/auth/v1/token')return new Response(JSON.stringify({access_token:'access',refresh_token:'refresh',expires_in:3600,user:{id:'user-1',email:'alex@example.com'}}));
+  if(route.pathname==='/auth/v1/user')return new Response(JSON.stringify({id:'user-1',email:'alex@example.com'}));
+  if(route.pathname==='/rest/v1/saved_reports')return new Response(JSON.stringify(route.search.includes('select=report')?[{report:{id:'0b1c2d3e-4f50-4617-8829-9a0b1c2d3e4f',title:'Cloud menu'}}]:[]),{status:options.method==='POST'?201:200});
+  throw Error(`Unexpected upstream request: ${route.pathname}`);
+ };
+ try{await withApp(configured,async base=>{
+  assert.equal((await networkFetch(base+'/api/account/reports')).status,401);
+  const login=await networkFetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'alex@example.com',password:'a-long-test-password'})});
+  assert.equal(login.status,200);
+  const {sessionToken}=await login.json();
+  const headers={'Content-Type':'application/json','X-YOEO-Session':sessionToken};
+  const id='6f1c2f3a-1111-4222-8333-444455556666';
+  const report={id,createdAt:new Date().toISOString(),title:'Test menu',dishes:[],summary:'Simulated'};
+  assert.equal((await networkFetch(base+'/api/account/reports',{method:'POST',headers,body:JSON.stringify({...report,id:'not-a-uuid'})})).status,400);
+  assert.equal((await networkFetch(base+'/api/account/reports',{method:'POST',headers,body:JSON.stringify(report)})).status,200);
+  const insert=upstream.find(u=>u.method==='POST'&&u.path==='/rest/v1/saved_reports');
+  assert.equal(insert.body.owner_id,'user-1');assert.equal(insert.body.report.title,'Test menu');assert.equal(insert.body.id,id);
+  const list=await networkFetch(base+'/api/account/reports',{headers});
+  assert.deepEqual((await list.json()).map(r=>r.title),['Cloud menu']);
+  assert.equal((await networkFetch(base+'/api/account/reports/'+id,{method:'DELETE',headers,body:'{}'})).status,200);
+  assert.ok(upstream.some(u=>u.method==='DELETE'&&u.path.includes('owner_id=eq.user-1')));
+ });}finally{globalThis.fetch=networkFetch;}
+});

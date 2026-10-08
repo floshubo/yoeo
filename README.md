@@ -26,7 +26,7 @@ Run `pnpm test` and `pnpm build` to verify the source. [Next Gen review notes](d
 
 The native iOS and Android projects are included. See [iOS build and App Store handoff](docs/IOS_APP_STORE_HANDOFF.md) for production configuration, Mac builds, TestFlight sharing and store requirements. GitHub Actions includes an unsigned iOS simulator build. Apple signing and review are required for an App Store release, but not for a Next Gen source-and-video submission. Share a deployed HTTPS PWA URL for immediate browser use, or use TestFlight for native iPhone testing.
 
-Production deployment and the three-free-scan account limit: see [publishing setup](docs/PUBLISH.md). The live PWA and API use `https://yoeo.onrender.com`. Native RevenueCat purchase integration is implemented; store products and entitlements are configured outside this repository.
+Production deployment, the three-free-scan limit and account-free Pro purchases: see [publishing setup](docs/PUBLISH.md) and [Pro without a YOEO account](docs/GUEST_PURCHASES.md). The live PWA and API use `https://yoeo.onrender.com`. Native RevenueCat purchase integration is implemented; store products and entitlements are configured outside this repository.
 
 Features include allergen-group onboarding, saved-result filters, profile editing, avatar uploads, subscription previews, and password reset. See [mobile and account setup](docs/MOBILE-AND-ACCOUNTS.md) for cloud configuration and native deployment notes.
 
@@ -110,7 +110,7 @@ pnpm test
 pnpm build
 ```
 
-58 automated tests cover API validation, auth/PKCE handoff, scan limits, secret-safe errors, provider request formats, Gemini parsing, malformed/truncated responses, RevenueCat behavior, and conservative allergen matching. `scripts/ui-test.mjs` tests onboarding, editing, local persistence, upload, missing-key errors and mocked report generation/saving in a headless browser. Set `YOEO_TOOLS_DIR` to a directory containing Playwright, or install Playwright in your development environment. Screenshots are written to `test-results/`.
+The automated tests cover API validation, auth/PKCE handoff, scan limits, account-free store purchases, secret-safe errors, provider request formats, Gemini parsing, malformed/truncated responses, RevenueCat behavior, and conservative allergen matching. `scripts/ui-test.mjs` tests onboarding, editing, local persistence, upload, missing-key errors and mocked report generation/saving in a headless browser. Set `YOEO_TOOLS_DIR` to a directory containing Playwright, or install Playwright in your development environment. Screenshots are written to `test-results/`.
 
 Simulated browser camera and PWA tests pass; physical-device camera, native signing and store review remain to be done.
 

@@ -4,7 +4,8 @@ import type { Photo, Preference, Report } from "./types";
 import { Button, Icon, IconButton, Modal, Topbar } from "./components";
 import { processImage } from "./storage";
 import { tapFeedback } from './mobile';
-import { apiUrl, accountHeaders } from './api';
+import { apiUrl } from './api';
+import { usageHeaders } from './usage';
 import { useI18n } from './i18n';
 import { analysisRequest, type AnalysisProgress } from './analysisRequest.mjs';
 export default function Scanner({
@@ -12,7 +13,6 @@ export default function Scanner({
   profile,
   onClose,
   onReport,
-  onAccount,
   onUpgrade,
   active = true,
 }: {
@@ -20,7 +20,6 @@ export default function Scanner({
   profile: Preference[];
   onClose: () => void;
   onReport: (report: Report) => void;
-  onAccount: () => void;
   onUpgrade: () => void;
   active?: boolean;
 }) {
@@ -167,7 +166,7 @@ export default function Scanner({
     const controller = new AbortController();
     abort.current = controller;
     try {
-      const token = sessionStorage.getItem("yoeo-access-token");
+      const scanHeaders = await usageHeaders();
       const res = await analysisRequest(apiUrl("/api/analyze"), JSON.stringify({
         images: photos.map(({ data, kind }) => ({ data, kind })),
         text: '',
@@ -176,8 +175,7 @@ export default function Scanner({
       }), {
         headers: {
           "Content-Type": "application/json",
-          ...accountHeaders(),
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...scanHeaders,
         },
         signal: controller.signal,
         onProgress: value => { if (alive.current && abort.current === controller) setProgress(value); },
@@ -360,8 +358,7 @@ export default function Scanner({
                 <div role="alert" className="error-box">
                   <strong>{t('Analysis needs your attention')}</strong>
                   <p>{error}</p>
-                  {accessAction==='SCAN_LIMIT_REACHED'&&<Button onClick={onUpgrade}>{t('Upgrade to Pro')}</Button>}
-                  {accessAction==='SIGN_IN_REQUIRED'&&<Button onClick={onAccount}>{t('Sign in to continue')}</Button>}
+                  {(accessAction==='SCAN_LIMIT_REACHED'||accessAction==='SIGN_IN_REQUIRED')&&<Button onClick={onUpgrade}>{t('Upgrade to Pro')}</Button>}
                 </div>
               )}
               <div className="scan-actions">

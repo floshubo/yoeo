@@ -25,6 +25,7 @@ await page.addInitScript(()=>{
  if(!localStorage.getItem('yoeo-profile'))localStorage.setItem('yoeo-profile',JSON.stringify({name:'Test',completed:true,allergens:[{name:'Milk',severity:'Critical'}]}));
  sessionStorage.setItem('yoeo-install-guide-seen','1');
 });
+const savedCount=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length);
 try{
  await page.goto(process.env.YOEO_TEST_URL||'http://127.0.0.1:5187');
  await page.getByRole('button',{name:'Start Analyzing'}).click();
@@ -34,16 +35,26 @@ try{
  await page.getByRole('checkbox',{name:/I agree to send/}).check();
  await page.getByRole('button',{name:'Analyze 1 photo'}).click();
  await page.getByRole('button',{name:/Show all results/}).first().click();
+ // Guests save on the device: no sign-in request and no paywall.
  await page.getByRole('button',{name:'Save results'}).click();
- await page.getByRole('heading',{name:'Sign in to save your results'}).waitFor();
- assert.equal(await page.getByRole('heading',{name:/Subscription|Choose a plan/}).count(),0);
- assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),0);
+ await page.getByRole('heading',{name:'Saved Results'}).waitFor();
+ assert.equal(await page.getByRole('heading',{name:/Sign in|Subscription|Choose a plan/}).count(),0);
+ assert.equal(await savedCount(),1);
+ assert.equal(await page.getByRole('heading',{name:'Test menu'}).count(),1);
+ // A YOEO account stays optional and can be skipped from the account screen.
+ await page.getByRole('navigation').getByRole('button',{name:'Profile',exact:true}).click();
+ await page.getByRole('button',{name:'Sign in or create account',exact:true}).click();
+ await page.getByText(/Signing in is optional/).waitFor();
+ await page.getByRole('button',{name:'Continue without signing in',exact:true}).click();
+ await page.locator('.screen-profile').waitFor();
+ // Signing in still works and keeps the locally saved result.
+ await page.getByRole('button',{name:'Sign in or create account',exact:true}).click();
  await page.getByLabel('Email address').fill('test@example.invalid');
  await page.locator('input[type=password]').fill('a-long-test-password');
  await page.getByRole('button',{name:'Sign in',exact:true}).click();
- await page.getByRole('heading',{name:'Saved Results'}).waitFor();
- assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('yoeo-reports')||'[]').length),1);
- assert.equal(await page.getByRole('heading',{name:'Test menu'}).count(),1);
+ await page.getByText('Signed in as test@example.invalid').waitFor();
+ await page.getByRole('button',{name:'Go back',exact:true}).click();await page.locator('.screen-profile').waitFor();
+ assert.equal(await savedCount(),1);
  await page.getByRole('navigation').getByRole('button',{name:'Allergens',exact:true}).click();
  await page.getByRole('tab',{name:'All',exact:true}).click();
  await page.getByRole('searchbox',{name:'Find an allergen'}).fill('Milk');
@@ -51,5 +62,5 @@ try{
  await page.getByRole('searchbox',{name:'Find an allergen'}).fill('No-match');
  await page.getByText('No matching allergens.').waitFor();
  assert.deepEqual(errors,[]);
- console.log('Save/account flow passed: guest save requests sign-in, signed-in save opens Saved Results without a paywall, and All allergen search filters by typed name. All APIs were mocked.');
+ console.log('Save/account flow passed: guest save stores results on the device without sign-in or a paywall, the YOEO account stays optional, sign-in still works, and All allergen search filters by typed name. All APIs were mocked.');
 }finally{await browser.close();}

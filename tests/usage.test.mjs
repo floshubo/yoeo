@@ -7,13 +7,13 @@ const body={images:[],text:'Menu soup',profile:[]};
 const post=base=>fetch(base+'/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 test('development scans do not require a cloud account',async()=>{await serve(createApp({env:{},analyzeFn:async()=>({ok:true})}),async base=>{for(let i=0;i<4;i++)assert.equal((await post(base)).status,200);});});
 test('production allows an anonymous scan before account setup',async()=>{let calls=0;await serve(createApp({env:{NODE_ENV:'production'},analyzeFn:async()=>{calls++;return {ok:true};}}),async base=>assert.equal((await post(base)).status,200));assert.equal(calls,1);});
-test('anonymous allowance counts successful scans and requires sign-in after three',async()=>{
+test('anonymous allowance counts successful scans and offers Pro after three',async()=>{
  let token='';const req=()=>({headers:{},body:{guestToken:token},get:()=>undefined});const res=()=>({append:()=>{}});
  const u=usageService({NODE_ENV:'production',SESSION_SECRET:'x'.repeat(32)},{accountsEnabled:false});
  const failed=await u.reserve(req(),res());await u.finish(failed,false);
  for(let i=0;i<3;i++){const response=res();const reservation=await u.reserve(req(),response);token=(await u.finish(reservation,true)).usageToken;}
  assert.equal((await u.status(req(),res())).remaining,0);
- await assert.rejects(u.reserve(req(),res()),error=>error.status===401&&error.code==='SIGN_IN_REQUIRED');
+ await assert.rejects(u.reserve(req(),res()),error=>error.status===402&&error.code==='SCAN_LIMIT_REACHED');
 });
 test('a signed-in Pro account continues after the anonymous allowance',async()=>{
  let token='',headers;const req=()=>({headers:{},body:{guestToken:token},get:()=>undefined});const res=()=>({append:()=>{}});
@@ -35,8 +35,14 @@ test('premium status is checked before free scans are exhausted',async()=>{
 });
 
 test('subscription lookup failure does not grant premium access',async()=>{
+ let token='';const req=()=>({headers:{},body:{guestToken:token},get:()=>undefined});const res={append:()=>{}};
  const u=usageService({NODE_ENV:'production',SUPABASE_URL:'https://example.test',SUPABASE_PUBLISHABLE_KEY:'public'},{accountsEnabled:true,getSession:async()=>({user:{id:'user'},token:'token'})},{fetchImpl:async()=>new Response('{}',{status:503})});
- await assert.rejects(u.status({headers:{},get:()=>undefined},{append:()=>{}}),error=>error.status===503);
+ // Remaining free scans stay usable during the outage, but nothing becomes Pro.
+ const status=await u.status(req(),res);
+ assert.equal(status.plan,'free');assert.equal(status.remaining,3);
+ for(let i=0;i<3;i++){token=(await u.finish(await u.reserve(req(),res),true)).usageToken;}
+ await assert.rejects(u.status(req(),res),error=>error.status===503);
+ await assert.rejects(u.reserve(req(),res),error=>error.status===503);
 });
 test('a RevenueCat yoeo_pro entitlement unlocks scans when the local plan is free',async()=>{
  let token='';const req=()=>({headers:{},body:{guestToken:token},get:()=>undefined});const res=()=>({append:()=>{}});
@@ -73,7 +79,7 @@ test('default Apple key verifies active, expired and missing RevenueCat entitlem
  entitlement=null;
  assert.equal((await status()).plan,'free');
  lookupStatus=503;
- await assert.rejects(status(),error=>error.status===503);
+ assert.equal((await status()).plan,'free','A failed lookup never grants Pro while the free allowance remains available');
 });
 test('production subscription lookup ignores a Test Store key',async()=>{
  const u=usageService({NODE_ENV:'production',SUPABASE_URL:'https://example.test',SUPABASE_PUBLISHABLE_KEY:'public',REVENUECAT_SERVER_API_KEY:'test_old_key'},

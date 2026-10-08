@@ -4,7 +4,7 @@ Recommended starting setup: one Render Free web service for the Node API and bui
 
 ## Setup
 
-1. Create a Supabase project. Apply all three SQL migrations in `supabase/migrations` in filename order. Save its project URL, anon key and service-role key in your password manager.
+1. Create a Supabase project. Apply all SQL migrations in `supabase/migrations` in filename order (person profiles, account deletion, scan usage, saved results). Save its project URL, anon key and service-role key in your password manager.
 2. Configure email authentication and a verified sending domain with a transactional email provider, or enable Google OAuth for your testers. Default Supabase email delivery is restricted; see `MOBILE-AND-ACCOUNTS.md`. Keep email confirmation enabled.
 3. Push this project to a private GitHub repository. `.gitignore` excludes `.env`, and `.dockerignore` excludes every `.env` file from the image. Never add secrets to the repository, frontend variables, or Docker build arguments.
 4. Create a Render Blueprint using `render.yaml`. Choose Free. Enter the AI key, Supabase URL, and Supabase publishable key in its private environment settings. Render generates `SESSION_SECRET`. Set `APP_URL` to the exact public HTTPS origin used by the app, with no trailing slash. If the first start waits for the correct URL, update it and redeploy.
@@ -13,11 +13,11 @@ Recommended starting setup: one Render Free web service for the Node API and bui
 
 ## Limit and Pro access
 
-`NODE_ENV=production` gives each browser three successful analysis requests before sign-in. One request can include several photos. Failed provider calls do not consume a scan. The count is carried in a server-signed token stored by the PWA (and an HTTP-only cookie when served directly), so client code cannot forge a lower count. After the allowance is used, the user must sign in and have an active Pro entitlement. Clearing browser data can reset a device allowance, so add server-side abuse controls before a large public launch.
+`NODE_ENV=production` gives each device three successful analysis requests. One request can include several photos. Failed provider calls do not consume a scan. The count is carried in a server-signed token stored by the app (and an HTTP-only cookie when served directly), so client code cannot forge a lower count. After the allowance is used, the user needs an active YOEO Pro entitlement; no YOEO account is required. The native app sends its anonymous RevenueCat customer ID in the `X-YOEO-Purchase-ID` header and the server verifies the `yoeo_pro` entitlement with RevenueCat before every paid scan (see [Pro without a YOEO account](GUEST_PURCHASES.md)). Clearing app data can reset a device allowance, so add server-side abuse controls before a large public launch.
 
 Local `pnpm start` serves a production build for preview but stays unlimited unless `NODE_ENV=production` is set. Live production refuses startup without the required account and AI settings. IP rate limits still protect the anonymous AI endpoint.
 
-Pro checks use the signed-in user's Supabase access token. The security-definer RPC verifies that `auth.uid()` matches the requested account, while the entitlement table remains inaccessible to browser clients. Pro is currently administrator-managed in `scan_accounts`: set `plan='pro'` and optionally `pro_until` for a verified account using the Supabase SQL editor. Do not grant users write access to this table. Payments and subscription webhooks are not implemented; the Upgrade button shows the subscription page and honestly states that payment checkout is coming soon. A payment provider must verify payment server-side before granting Pro.
+Signed-in users are additionally checked against their account, which is the only Pro path for website users because a browser has no App Store purchase. The security-definer RPC verifies that `auth.uid()` matches the requested account, while the entitlement table remains inaccessible to browser clients. Account Pro is administrator-managed in `scan_accounts`: set `plan='pro'` and optionally `pro_until` for a verified account using the Supabase SQL editor. Do not grant users write access to this table. Subscription webhooks are not implemented; native purchases are verified server-side against RevenueCat on every paid scan, and a failed lookup never grants Pro.
 
 ## Free-tier limits and costs
 

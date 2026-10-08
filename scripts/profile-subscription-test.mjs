@@ -18,27 +18,36 @@ try {
    localStorage.setItem('yoeo-account-session','isolated-session');
    localStorage.setItem('yoeo-language','en');
    if(!native)return;
-   const state={pro,userId:null,customerReads:0,configured:[],callbacks:new Map(),nextId:0,delayRead:false,pendingRead:null,failRead:false};
+   const state={pro,userId:'$RCAnonymousID:'+'c'.repeat(32),customerReads:0,configured:[],logins:[],logouts:0,callbacks:new Map(),nextId:0,holdReads:true,pendingReads:[],delayRead:false,pendingRead:null,failRead:false};
    const info=(active=state.pro)=>({originalAppUserId:state.userId,entitlements:{active:active?{[entitlementId]:{isActive:true,productIdentifier:'yearly'}}:{}}});
    window.__purchases=state;
    window.__setEntitlement=pro=>{state.pro=pro;for(const item of state.callbacks.values())if(item.event==='customerInfo')item.callback(info());};
    window.__resumeApp=()=>{for(const item of state.callbacks.values())if(item.event==='appStateChange')item.callback({isActive:true});};
+   window.__releaseReads=()=>{state.holdReads=false;for(const release of state.pendingReads.splice(0))release();};
    window.webkit={messageHandlers:{bridge:{}}};
    window.Capacitor={
     PluginHeaders:[
-     {name:'Purchases',methods:['setLogLevel','configure','logIn','logOut','getCustomerInfo','getOfferings','removeCustomerInfoUpdateListener'].map(name=>({name,rtype:'promise'})).concat([{name:'addCustomerInfoUpdateListener',rtype:'callback'}])},
+     {name:'Purchases',methods:['setLogLevel','configure','isAnonymous','getAppUserID','logIn','logOut','syncPurchases','getCustomerInfo','getOfferings','restorePurchases','removeCustomerInfoUpdateListener'].map(name=>({name,rtype:'promise'})).concat([{name:'addCustomerInfoUpdateListener',rtype:'callback'}])},
      {name:'App',methods:[{name:'getLaunchUrl',rtype:'promise'},{name:'addListener',rtype:'callback'},{name:'removeListener',rtype:'promise'}]},
     ],
     nativePromise:async(plugin,method,options)=>{
      if(plugin==='Purchases') {
-      if(method==='configure'){state.userId=options.appUserID||null;state.configured.push(state.userId);}
-      if(method==='logIn')state.userId=options.appUserID;
-      if(method==='logOut'){state.userId=null;state.pro=false;}
+      if(method==='configure')state.configured.push(options.appUserID||null);
+      if(method==='isAnonymous')return {isAnonymous:true};
+      if(method==='getAppUserID')return {appUserID:state.userId};
+      const notify=customerInfo=>{for(const item of state.callbacks.values())if(item.event==='customerInfo')item.callback(customerInfo);};
+      if(method==='syncPurchases')throw Error('syncPurchases is only for an account RevenueCat already knows');
+      // Signing in links the anonymous store customer to the YOEO account; a new account inherits its purchases.
+      if(method==='logIn'){state.logins.push(options.appUserID);state.userId=options.appUserID;const customerInfo=info();notify(customerInfo);return {created:true,customerInfo};}
+      // Signing out returns to a fresh anonymous customer that holds nothing until Restore Purchases.
+      if(method==='logOut'){state.logouts++;state.userId='$RCAnonymousID:'+'e'.repeat(32);state.pro=false;const customerInfo=info();notify(customerInfo);return {customerInfo};}
+      if(method==='restorePurchases'){state.pro=true;const customerInfo=info();notify(customerInfo);return {customerInfo};}
       if(method==='getCustomerInfo') {
        state.customerReads++;
        if(state.failRead)throw Error('Offline');
        const customerInfo=info();
-       if(state.delayRead){state.delayRead=false;return new Promise(resolve=>{state.pendingRead=()=>resolve({customerInfo});});}
+       if(state.holdReads)return new Promise(resolve=>{state.pendingReads.push(()=>resolve({customerInfo}));});
+       if(state.delayRead){state.delayRead=false;return new Promise(resolve=>{state.pendingRead=()=>{state.pendingRead=null;resolve({customerInfo});};});}
        return {customerInfo};
       }
       // Subscription status must remain available without a working product catalog.
@@ -56,12 +65,9 @@ try {
     },
    };
   },{native,pro:scenario==='native-annual',entitlementId:config.entitlementId});
-  let releaseSession;
-  const sessionGate=new Promise(resolve=>{releaseSession=resolve;});
   await page.route('**/api/**',async route=>{
    const pathname=new URL(route.request().url()).pathname;
    const signedIn=!!route.request().headers()['x-yoeo-session'];
-   if(pathname==='/api/auth/session'&&native)await sessionGate;
    const json=pathname==='/api/auth/session'?{user:signedIn?{id:'annual-user',email:'test@example.invalid'}:null}:
     pathname==='/api/usage'?{enforced:true,plan:scenario==='web-pro'?'pro':'free',remaining:scenario==='web-pro'?null:3}:{configured:false};
    await route.fulfill({json});
@@ -69,10 +75,12 @@ try {
   await page.goto(process.env.YOEO_TEST_URL || 'http://127.0.0.1:5188');
   await page.getByRole('navigation').getByRole('button',{name:'Profile',exact:true}).click();
   if(native) {
-   assert.deepEqual(await page.evaluate(()=>window.__purchases.configured),[], 'Do not initialize an anonymous purchase customer while account identity is loading');
-   assert.equal(await page.locator('.profile-brand .badge.free').count(),0,'Do not flash Free while subscription identity is loading');
+   // The store customer is configured anonymously right away; a YOEO account is never used as its ID.
+   await page.waitForFunction(()=>window.__purchases.pendingReads.length>0);
+   assert.deepEqual(await page.evaluate(()=>window.__purchases.configured),[null],'Configure the anonymous store customer, never a YOEO account ID');
+   assert.equal(await page.locator('.profile-brand .badge.free').count(),0,'Do not flash Free while the subscription status is loading');
    assert.equal(await page.locator('.profile-header > p').count(),0);
-   releaseSession();
+   await page.evaluate(()=>window.__releaseReads());
   }
   const pro=scenario!=='native-free';
   await page.locator(pro?'.profile-brand .badge.pro':'.profile-brand .badge.free').waitFor();
@@ -82,6 +90,9 @@ try {
   await page.screenshot({path:`test-results/profile-subscription/${scenario}.png`});
   if(native) {
    await page.waitForFunction(()=>Array.from(window.__purchases.callbacks.values()).some(item=>item.event==='customerInfo'));
+   // The signed-in YOEO account is linked to the store customer, never used as its initial ID.
+   await page.waitForFunction(()=>window.__purchases.logins.length===1);
+   assert.deepEqual(await page.evaluate(()=>window.__purchases.logins),['annual-user']);
    // Purchase/restore listener updates the badge immediately, even while the API says Free.
    await page.evaluate(()=>window.__setEntitlement(true));
    await page.locator('.profile-brand .badge.pro').waitFor();
@@ -101,19 +112,25 @@ try {
    await page.evaluate(()=>{window.__purchases.pro=false;window.__resumeApp();});
    await page.locator('.profile-brand .badge.free').waitFor();
    await page.getByText('3 of 3 free scans remaining',{exact:true}).waitFor();
-   assert.deepEqual(await page.evaluate(()=>window.__purchases.configured),['annual-user']);
-   // Logout must not retain the previous customer's Pro badge.
+   assert.deepEqual(await page.evaluate(()=>window.__purchases.configured),[null]);
+   // Payment stays with the store account: signing out unlinks the YOEO account, and Restore Purchases in Settings brings Pro back without one.
    await page.evaluate(()=>window.__setEntitlement(true));
    await page.locator('.profile-brand .badge.pro').waitFor();
    await page.getByRole('button',{name:'Sign out',exact:true}).click();
    await page.getByRole('heading',{name:'Guest',exact:true}).waitFor();
    await page.locator('.profile-brand .badge.free').waitFor();
-   assert.equal(await page.locator('.profile-brand .badge.pro').count(),0);
+   assert.equal(await page.evaluate(()=>window.__purchases.logouts),1,'Sign-out returns the SDK to an anonymous store customer');
+   assert.deepEqual(await page.evaluate(()=>window.__purchases.configured),[null],'Sign-out must not reconfigure the store customer');
+   await page.getByRole('button',{name:'Settings',exact:true}).click();
+   await page.getByRole('button',{name:'Restore Purchases',exact:true}).click();
+   await page.getByText('Purchases restored. YOEO Pro is active.').waitFor();
+   await page.getByRole('button',{name:'Go back',exact:true}).click();
+   await page.locator('.profile-brand .badge.pro').waitFor();
   }
   assert.deepEqual(errors,[]);
   await page.close();
  }
- console.log('Profile subscription checks passed: active annual native entitlement overrides Free scan status, Pro has no subtitle/count, free counts remain, web Pro, purchase/restore updates, foreground expiry refresh, stale reads and logout identity. All purchase/API data is mocked.');
+ console.log('Profile subscription checks passed: active annual native entitlement overrides Free scan status, Pro has no subtitle/count, free counts remain, web Pro, purchase/restore updates, foreground expiry refresh, stale reads, account linking on sign-in, unlinking on sign-out, and Restore Purchases from Settings. All purchase/API data is mocked.');
 } catch(error) {
  for(const page of browser.contexts().flatMap(context=>context.pages())) {
   console.error(await page.locator('body').innerText());
